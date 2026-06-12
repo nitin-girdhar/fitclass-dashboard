@@ -1,0 +1,83 @@
+/**
+ * Dashboard navigation.
+ *
+ * Role → visible nav items:
+ *
+ *  super_admin / tenant_admin / org_admin / admin
+ *    → Leads · Assignments · Users · Analytics
+ *
+ *  org_manager / manager
+ *    → Leads · Assignments · Users
+ *
+ *  senior_sales_executive
+ *    → Leads · Assignments · Users · My Leads
+ *
+ *  sales_rep / sales_executive
+ *    → Leads · My Leads
+ *
+ *  read_only
+ *    → Leads
+ *
+ *  Visibility here is UX ONLY — every destination listed enforces its own
+ *  access on the server.
+ */
+import type { UserRole } from '@/src/types/auth';
+
+export interface NavItem {
+  id: string;
+  label: string;
+  href: string;
+  /** Explicit allow-list of roles that may SEE this item. */
+  roles: readonly UserRole[];
+}
+
+// ── Role tier aliases ─────────────────────────────────────────────────────────
+// New DB roles (AUTH_PROVIDER=local) listed alongside legacy Supabase roles so
+// both auth paths produce the correct nav without any runtime branching here.
+
+const ADMIN_ROLES: readonly UserRole[] = [
+  'super_admin', 'tenant_admin', 'org_admin', 'admin',
+];
+
+const MANAGER_ROLES: readonly UserRole[] = [
+  'org_manager', 'manager',
+];
+
+const SSE_ROLES: readonly UserRole[] = [
+  'senior_sales_executive',
+];
+
+const SE_ROLES: readonly UserRole[] = [
+  'sales_rep', 'sales_executive',
+];
+
+const READ_ONLY_ROLES: readonly UserRole[] = [
+  'read_only',
+];
+
+export const DASHBOARD_NAV: readonly NavItem[] = [
+  {
+    id: 'leads', label: 'Leads', href: '/dashboard/leads',
+    roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES, ...SE_ROLES, ...READ_ONLY_ROLES],
+  },
+  {
+    id: 'assignments', label: 'Assignments', href: '/dashboard/assignments',
+    roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES],
+  },
+  {
+    id: 'users', label: 'Users', href: '/dashboard/users',
+    roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES],
+  },
+  {
+    id: 'analytics', label: 'Analytics', href: '/dashboard/analytics',
+    roles: [...ADMIN_ROLES],
+  },
+  {
+    id: 'my-leads', label: 'My Leads', href: '/dashboard/my-leads',
+    roles: [...SSE_ROLES, ...SE_ROLES],
+  },
+] as const;
+
+export function navItemsForRole(role: UserRole): NavItem[] {
+  return DASHBOARD_NAV.filter((item) => item.roles.includes(role));
+}
