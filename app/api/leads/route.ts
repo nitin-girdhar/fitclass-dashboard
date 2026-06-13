@@ -17,8 +17,7 @@ const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? "supabase";
 // Fixed column headers returned for DB-sourced leads.
 // Order must match rawCells indexing in adaptLeadView below.
 const DB_LEAD_HEADERS = [
-  'Date', 'Name', 'Phone Number',
-  'Status', 'Campaign', 'Platform', 'Location',
+  'Date', 'Name', 'Phone Number', 'Status',
 ];
 
 // tx.unsafe() returns snake_case column names (the camelCase transform only
@@ -51,16 +50,11 @@ function adaptLeadView(view: Record<string, any>, index: number) {
 
   const dateStr = toDateString(createdAt);
 
-  const location = [view.city, view.state, view.country].filter(Boolean).join(', ');
-
   const rawCells: string[] = [
     dateStr,
     fullName,
     view.phone  ?? '',
     view.status ?? '',
-    campaignName,
-    platform,
-    location,
   ];
 
   return {

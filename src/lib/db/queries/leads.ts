@@ -296,7 +296,25 @@ export async function updateLead(
       WHERE id = ${leadId} AND org_id = ${orgId} AND NOT is_deleted
       RETURNING id
     `;
-    return result ?? null;
+    if (!result) return null;
+
+    // When a note accompanies any field change, log it as an internal_note interaction
+    if (data.transitionNote?.trim()) {
+      const [itRow] = await tx`
+        SELECT id FROM interaction_types WHERE name = 'internal_note' LIMIT 1
+      `;
+      if (itRow) {
+        await tx`
+          INSERT INTO lead_interactions
+            (org_id, lead_id, user_id, interaction_type_id, notes, occurred_at)
+          VALUES
+            (${orgId}, ${leadId}, ${userId}, ${itRow.id},
+             ${data.transitionNote.trim()}, NOW())
+        `;
+      }
+    }
+
+    return result;
   });
 }
 

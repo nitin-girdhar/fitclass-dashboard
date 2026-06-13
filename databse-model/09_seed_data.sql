@@ -6,6 +6,13 @@ BEGIN;
 -- Requires 07_roles_and_grants.sql to have run first.
 SET LOCAL ROLE service_role;
 
+-- ── Lookup extension: internal_note interaction type ─────────────────────────
+-- Allows API to log assignee-change notes and other free-form annotations
+-- as lead_interactions without forcing a status transition.
+INSERT INTO interaction_types (name, description)
+VALUES ('internal_note', 'Internal note or annotation added by a team member')
+ON CONFLICT (name) DO NOTHING;
+
 -- ============================================================
 -- TENANTS (2)
 -- All lookup IDs resolved by name subquery — never hardcoded integers.

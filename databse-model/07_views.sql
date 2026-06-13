@@ -346,7 +346,8 @@ WHERE NOT o.is_deleted;
 
 -- ============================================================
 -- VW_LEAD_FOLLOWUP_TIMELINE
--- Unified chronological timeline per lead: status changes + follow-up entries.
+-- Unified chronological timeline per lead: status changes, follow-up
+-- entries, and logged interactions. Ordered by the caller (DESC).
 -- ============================================================
 CREATE OR REPLACE VIEW vw_lead_followup_timeline WITH (security_invoker = true) AS
 SELECT
@@ -370,7 +371,8 @@ SELECT
     NULL::uuid                  AS followup_id,
     NULL::text                  AS followup_status,
     NULL::timestamptz           AS scheduled_at,
-    NULL::timestamptz           AS completed_at
+    NULL::timestamptz           AS completed_at,
+    NULL::text                  AS interaction_type
 FROM  lead_status_log         lsl
 LEFT JOIN users               cb  ON cb.id  = lsl.changed_by_id
 LEFT JOIN lead_statuses       os  ON os.id  = lsl.old_status_id
@@ -402,11 +404,84 @@ SELECT
     lf.id                       AS followup_id,
     fs.name                     AS followup_status,
     lf.scheduled_at,
-    lf.completed_at
+    lf.completed_at,
+    NULL::text                  AS interaction_type
 FROM  lead_follow_ups         lf
 JOIN  follow_up_statuses      fs  ON fs.id = lf.status_id
 JOIN  users                   u   ON u.id  = lf.assigned_user_id
-WHERE NOT lf.is_deleted;
+WHERE NOT lf.is_deleted
+
+UNION ALL
+
+SELECT
+    li.id                       AS event_id,
+    li.org_id,
+    li.lead_id,
+    'interaction'               AS event_type,
+    li.occurred_at              AS event_at,
+    u.full_name                 AS actor_name,
+    u.email                     AS actor_email,
+    NULL::text                  AS old_status,
+    NULL::text                  AS old_status_label,
+    NULL::text                  AS new_status,
+    NULL::text                  AS new_status_label,
+    NULL::text                  AS old_fail_reason,
+    NULL::text                  AS old_fail_reason_label,
+    NULL::text                  AS new_fail_reason,
+    NULL::text                  AS new_fail_reason_label,
+    NULL::text                  AS assigned_to_name,
+    li.notes                    AS note,
+    NULL::uuid                  AS followup_id,
+    NULL::text                  AS followup_status,
+    NULL::timestamptz           AS scheduled_at,
+    NULL::timestamptz           AS completed_at,
+    it.name                     AS interaction_type
+FROM  lead_interactions         li
+JOIN  interaction_types         it  ON it.id = li.interaction_type_id
+JOIN  users                     u   ON u.id  = li.user_id
+WHERE NOT li.is_deleted
+
+UNION ALL
+
+-- Assignment changes recorded by audit_marketing_leads_changes trigger
+SELECT
+    mlh.id                      AS event_id,
+    ml.org_id,
+    mlh.lead_id,
+    'assignment_change'         AS event_type,
+    mlh.changed_at              AS event_at,
+    cu.full_name                AS actor_name,
+    cu.email                    AS actor_email,
+    NULL::text                  AS old_status,
+    NULL::text                  AS old_status_label,
+    NULL::text                  AS new_status,
+    NULL::text                  AS new_status_label,
+    NULL::text                  AS old_fail_reason,
+    NULL::text                  AS old_fail_reason_label,
+    NULL::text                  AS new_fail_reason,
+    NULL::text                  AS new_fail_reason_label,
+    COALESCE(new_u.full_name, 'Unassigned') AS assigned_to_name,
+    CASE
+        WHEN old_u.full_name IS NULL AND new_u.full_name IS NOT NULL
+            THEN 'Assigned to ' || new_u.full_name
+        WHEN old_u.full_name IS NOT NULL AND new_u.full_name IS NULL
+            THEN 'Unassigned from ' || old_u.full_name
+        WHEN old_u.full_name IS NOT NULL AND new_u.full_name IS NOT NULL
+            THEN 'Reassigned from ' || old_u.full_name || ' to ' || new_u.full_name
+        ELSE NULL
+    END                         AS note,
+    NULL::uuid                  AS followup_id,
+    NULL::text                  AS followup_status,
+    NULL::timestamptz           AS scheduled_at,
+    NULL::timestamptz           AS completed_at,
+    NULL::text                  AS interaction_type
+FROM  marketing_leads_history   mlh
+JOIN  marketing_leads            ml    ON ml.id  = mlh.lead_id
+LEFT JOIN users                  cu    ON cu.id  = mlh.changed_by_user_id
+LEFT JOIN users                  old_u ON old_u.id = (mlh.changed_fields -> 'assigned_user_id' ->> 'old')::uuid
+LEFT JOIN users                  new_u ON new_u.id = (mlh.changed_fields -> 'assigned_user_id' ->> 'new')::uuid
+WHERE mlh.operation = 'U'
+  AND mlh.changed_fields ? 'assigned_user_id';
 
 -- ============================================================
 -- VW_FOLLOWUP_PIPELINE_ENRICHED

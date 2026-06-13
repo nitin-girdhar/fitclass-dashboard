@@ -195,20 +195,25 @@ export interface TimelineEvent {
   eventId: string;
   orgId: string;
   leadId: string;
-  eventType: 'status_change' | 'follow_up';
+  eventType: 'status_change' | 'follow_up' | 'interaction' | 'assignment_change';
   eventAt: string;
   actorName: string | null;
   actorEmail: string | null;
   oldStatus: string | null;
+  oldStatusLabel: string | null;
   newStatus: string | null;
+  newStatusLabel: string | null;
   oldFailReason: string | null;
+  oldFailReasonLabel: string | null;
   newFailReason: string | null;
+  newFailReasonLabel: string | null;
   assignedToName: string | null;
   note: string | null;
   followupId: string | null;
   followupStatus: string | null;
   scheduledAt: string | null;
   completedAt: string | null;
+  interactionType: string | null;
 }
 
 export interface StatusChangePayload {

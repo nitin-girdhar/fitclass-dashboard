@@ -139,8 +139,9 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             newStatus: payload.value,
-            ...(payload.followUp    ? { followUp: payload.followUp }           : {}),
-            ...(payload.failReasonId != null ? { failReasonId: payload.failReasonId } : {}),
+            ...(payload.followUp        ? { followUp: payload.followUp }                 : {}),
+            ...(payload.failReasonId != null ? { failReasonId: payload.failReasonId }    : {}),
+            ...(payload.transitionNote  ? { transitionNote: payload.transitionNote }     : {}),
           }),
         });
       } else {

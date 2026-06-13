@@ -21,4 +21,8 @@ select *
 from public.user_roles;
 
 select *
-from public.users;
+from public.users
+where email = 'nisha.goyal@fitclass.in';
+
+select *
+from public.marketing_platforms

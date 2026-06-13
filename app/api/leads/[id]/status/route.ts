@@ -123,8 +123,10 @@ export async function PATCH(
       }
 
       // 6. Publish transition note so the SECURITY DEFINER trigger can capture it
+      // SET LOCAL does not support parameterized values — escape single quotes manually.
       if (data.transitionNote) {
-        await tx`SET LOCAL app.lead_transition_note = ${data.transitionNote}`;
+        const escaped = data.transitionNote.replace(/'/g, "''");
+        await tx.unsafe(`SET LOCAL app.lead_transition_note = '${escaped}'`);
       }
 
       // 7. Update lead — trigger fires here and writes to lead_status_log

@@ -22,6 +22,7 @@ const updateLeadSchema = z.object({
   statusId: z.number().optional(),
   failReasonId: z.number().optional(),
   assignedUserId: z.string().nullable().optional(),
+  transitionNote: z.string().max(1000).optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(z.string()).optional(),
 });

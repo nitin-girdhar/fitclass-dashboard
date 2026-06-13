@@ -1,6 +1,6 @@
 export interface Lead {
   rowIndex: number;
-  leadId?: string;         // UUID from DB — used for DB API update calls
+  leadId?: string;
 
   rawCells: string[];
 
@@ -17,6 +17,13 @@ export interface Lead {
   joiningPlan:        string;
   membershipInterest: string;
   fitnessGoal:        string;
+
+  // Extra fields from DB view (not in Sheets path)
+  assignedUserId?:  string | null;
+  assignedRepName?: string | null;
+  platform?:        string;
+  orgId?:           string;
+  orgName?:         string;
 }
 
 export interface StatsData {
@@ -35,4 +42,5 @@ export interface UpdatePayload {
     notes?: string | null;
   };
   failReasonId?: number;
+  transitionNote?: string;
 }

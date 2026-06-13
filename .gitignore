@@ -44,7 +44,6 @@ next-env.d.ts
 
 # claude
 CLAUDE.md
-.claude/
 
 # sensitive — credential files accidentally saved to disk
 *service-account*.json
