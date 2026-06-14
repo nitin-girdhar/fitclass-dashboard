@@ -17,9 +17,9 @@
  * Sheets engine doesn't know about assignments today; once /api/leads joins
  * the assignments table (Phase 2E+), populate `assignedToUserId` from there.
  */
-import type { SessionUser } from '@/src/types/auth';
-import { canAccessLeadBranch } from './branches';
-import { RANKS } from './ranks';
+import type { SessionUser } from "@/src/types/auth";
+import { canAccessLeadBranch } from "./branches";
+import { RANKS } from "./ranks";
 
 export interface LeadContext {
   /** Sheet tab name (= branch identifier). */
@@ -48,10 +48,11 @@ export function canViewLead(
 ): boolean {
   if (!user) return false;
   const rank = user.rank;
-  if (rank >= RANKS.ADMIN) return true;          // admin tier → unrestricted
+  if (rank >= RANKS.ADMIN) return true; // admin tier → unrestricted
   if (!canAccessLeadBranch(user, lead.branch)) return false;
-  if (rank >= RANKS.SSE) return true;            // manager tier + SSE → branch-wide
-  if (rank >= RANKS.SALES_REP) return isOwner(user, lead) || !lead.assignedToUserId; // SE → own + unassigned
+  if (rank >= RANKS.SSE) return true; // manager tier + SSE → branch-wide
+  if (rank >= RANKS.sales_representative)
+    return isOwner(user, lead) || !lead.assignedToUserId; // SE → own + unassigned
   return false;
 }
 
@@ -70,7 +71,7 @@ export function canAssignLead(
 ): boolean {
   if (!user) return false;
   const rank = user.rank;
-  if (rank >= RANKS.ADMIN) return true;  // admin tier → unrestricted
+  if (rank >= RANKS.ADMIN) return true; // admin tier → unrestricted
   if (rank >= RANKS.SSE) return canAccessLeadBranch(user, lead.branch); // manager + SSE → branch-scoped
   return false;
 }
@@ -157,14 +158,14 @@ export function canAssignToUser(
   actorId: string,
   targetUserId: string,
 ): boolean {
-  if (actorId === targetUserId) return false;
+  if (targetRank <= RANKS.READ_ONLY) return false;
   // Admin-tier users are never assignment targets (non-operational)
   if (targetRank >= RANKS.ADMIN) return false;
-  // Admin tier can assign to any non-admin-tier user
+  // Admin tier can assign to any non-admin-tier, non-read_only user
   if (actorRank >= RANKS.ADMIN) return true;
-  // Below admin: actor must strictly outrank target
-  // (manager→SSE ✓, manager→SE ✓, manager→manager ✗, SSE→SE ✓, SSE→SSE ✗, SE→anyone ✗)
-  return actorRank > targetRank;
+  // Below admin: actor must have same rank or higher than target
+  // (manager→manager ✓, manager→SSE ✓, SSE→SSE ✓, SSE→SE ✓, SE→anyone ✗)
+  return actorRank >= targetRank;
 }
 
 /**

@@ -20,12 +20,10 @@
  * for each event — handlers shouldn't hand-roll inserts. New event types are
  * added in `./types.ts` first; mutations.ts gains a one-line wrapper.
  */
-import { getSupabaseAdmin } from '@/src/lib/db/supabase';
-import { fromPostgrestError } from '@/src/lib/db/errors';
+import { withServiceTx } from '@/src/lib/db/transaction';
+import { fromPgError, DatabaseError } from '@/src/lib/db/errors';
 import type { ActivityInsert, JsonValue } from '@/src/types/database';
 import type { ActivityAction } from './types';
-
-const ACTIVITIES_TABLE = 'activities';
 
 interface LogParams {
   performedBy?: string | null;
@@ -36,8 +34,26 @@ interface LogParams {
 }
 
 async function insertActivity(row: ActivityInsert): Promise<void> {
-  const { error } = await getSupabaseAdmin().from(ACTIVITIES_TABLE).insert(row);
-  if (error) throw fromPostgrestError(error);
+  try {
+    await withServiceTx(async (tx) => {
+      await tx.unsafe(
+        `INSERT INTO activities
+           (action_type, performed_by, subject_user_id, lead_id, old_value, new_value)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)`,
+        [
+          row.action_type,
+          row.performed_by ?? null,
+          row.subject_user_id ?? null,
+          row.lead_id ?? null,
+          row.old_value != null ? JSON.stringify(row.old_value) : null,
+          row.new_value != null ? JSON.stringify(row.new_value) : null,
+        ],
+      );
+    });
+  } catch (err) {
+    if (err instanceof DatabaseError) throw err;
+    throw fromPgError(err);
+  }
 }
 
 function safeLog(scope: string, err: unknown): void {

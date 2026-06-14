@@ -7,11 +7,11 @@
  *   tenant_admin → all org IDs within their tenant
  *   everyone else (org_admin and below) → their own single org
  *
- * SERVER-ONLY (uses withServiceTx). Only call when AUTH_PROVIDER=local.
+ * SERVER-ONLY (uses withServiceTx).
  */
-import { withServiceTx } from '@/src/lib/db/transaction';
-import type { SessionUser } from '@/src/types/auth';
-import { RANKS } from './ranks';
+import { withServiceTx } from "@/src/lib/db/transaction";
+import type { SessionUser } from "@/src/types/auth";
+import { RANKS } from "./ranks";
 
 /**
  * Resolves the set of org IDs visible to `actor`.
@@ -20,7 +20,9 @@ import { RANKS } from './ranks';
  *   null      → no filter (super_admin)
  *   string[]  → restrict to these org IDs (may be empty if actor has no org)
  */
-export async function resolveActorOrgIds(actor: SessionUser): Promise<string[] | null> {
+export async function resolveActorOrgIds(
+  actor: SessionUser,
+): Promise<string[] | null> {
   const rank = actor.rank;
 
   if (rank >= RANKS.SUPER_ADMIN) return null; // all tenants — no restriction
@@ -42,6 +44,6 @@ export async function resolveActorOrgIds(actor: SessionUser): Promise<string[] |
     return orgs.map((r) => r.id);
   }
 
-  // org_admin, org_manager, senior_sales_executive, sales_rep, read_only
+  // org_admin, org_manager, senior_sales_executive, sales_representative, read_only
   return [actor.orgId];
 }

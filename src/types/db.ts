@@ -1,3 +1,14 @@
+/**
+ * Minimal user shape passed to follow-up / stage-change modals.
+ * Defined once here so StatusChangeTrigger and FollowUpScheduleModal
+ * share the same type rather than each declaring their own inline version.
+ */
+export interface OrgUser {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
 export interface Lead {
   id: string;
   orgId: string;
@@ -13,8 +24,9 @@ export interface Lead {
   stateId?: number | null;
   countryId?: number | null;
   campaignId?: string | null;
-  statusId: number;
-  failReasonId?: number | null;
+  stageId: number;
+  outcomeId?: number | null;
+  outcomeComment?: string | null;
   assignedUserId?: string | null;
   rawWebhookData?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
@@ -38,8 +50,14 @@ export interface LeadView {
   city?: string | null;
   state?: string | null;
   country?: string | null;
-  status: string;
-  failReason?: string | null;
+  stage: string;
+  stageLabel?: string | null;
+  followupRequired?: boolean | null;
+  isRejected?: boolean | null;
+  isTerminated?: boolean | null;
+  outcome?: string | null;
+  outcomeLabel?: string | null;
+  outcomeComment?: string | null;
   campaignName?: string | null;
   platform?: string | null;
   assignedRepName?: string | null;
@@ -141,29 +159,40 @@ export interface OrgChartNode {
   depth?: number;
 }
 
-export interface LeadStatus {
+export interface LeadStage {
   id: number;
   name: string;
   description: string | null;
   label: string;
-  requiresFollowup: boolean;
-  isRejection: boolean;
+  followupRequired: boolean;
+  isRejected: boolean;
+  isTerminated: boolean;
+}
+
+export interface LeadStageOutcome {
+  id: number;
+  stageId: number;
+  name: string;
+  label: string;
+  description: string | null;
+  requiresComment: boolean;
+  displayOrder: number;
 }
 
 export interface LeadStatusLogEntry {
   id: string;
   orgId: string;
   leadId: string;
-  oldStatusId: number | null;
-  newStatusId: number;
-  oldFailReasonId: number | null;
-  newFailReasonId: number | null;
+  oldStageId: number | null;
+  newStageId: number;
+  oldOutcomeId: number | null;
+  newOutcomeId: number | null;
   assignedUserId: string | null;
   changedById: string | null;
   transitionNote: string | null;
   changedAt: string;
-  oldStatusName?: string | null;
-  newStatusName?: string | null;
+  oldStageName?: string | null;
+  newStageName?: string | null;
   changedByName?: string | null;
 }
 
@@ -175,7 +204,7 @@ export interface FollowUpEnriched {
   leadFullName: string;
   leadPhone: string | null;
   leadEmail: string | null;
-  leadStatus: string;
+  leadStage: string;
   leadTags: string[];
   assignedRepId: string;
   assignedRepName: string;
@@ -199,14 +228,14 @@ export interface TimelineEvent {
   eventAt: string;
   actorName: string | null;
   actorEmail: string | null;
-  oldStatus: string | null;
-  oldStatusLabel: string | null;
-  newStatus: string | null;
-  newStatusLabel: string | null;
-  oldFailReason: string | null;
-  oldFailReasonLabel: string | null;
-  newFailReason: string | null;
-  newFailReasonLabel: string | null;
+  oldStage: string | null;
+  oldStageLabel: string | null;
+  newStage: string | null;
+  newStageLabel: string | null;
+  oldOutcome: string | null;
+  oldOutcomeLabel: string | null;
+  newOutcome: string | null;
+  newOutcomeLabel: string | null;
   assignedToName: string | null;
   note: string | null;
   followupId: string | null;
@@ -218,8 +247,9 @@ export interface TimelineEvent {
 
 export interface StatusChangePayload {
   leadId: string;
-  newStatus: string;
-  failReasonId?: number;
+  newStage: string;
+  outcomeId?: number;
+  outcomeComment?: string;
   transitionNote?: string;
   followUp?: {
     assignedUserId: string;

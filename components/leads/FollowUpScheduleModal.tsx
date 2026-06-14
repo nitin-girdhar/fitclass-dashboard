@@ -1,25 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { LeadStatus } from '@/src/types/db';
-
-interface OrgUser {
-  id: string;
-  fullName: string;
-  email: string;
-}
-
-interface FailReason {
-  id: number;
-  name: string;
-  label: string;
-  description: string | null;
-}
+import type { LeadStage, LeadStageOutcome, OrgUser } from '@/src/types/db';
+import { defaultScheduledAt } from '@/src/lib/utils/date';
 
 export interface FollowUpDetails {
   transitionNote?: string;
-  failReasonId?: number;
-  /** Absent when the new status does not require a follow-up (e.g. 'failed'). */
+  outcomeId?: number;
+  outcomeComment?: string;
+  /** Absent when the new stage does not require a follow-up (e.g. 'unqualified'). */
   followUp?: {
     assignedUserId: string;
     scheduledAt: string;
@@ -29,27 +18,20 @@ export interface FollowUpDetails {
 
 interface Props {
   open: boolean;
-  newStatus: LeadStatus;
+  newStage: LeadStage;
   orgUsers: OrgUser[];
   currentUserId: string;
-  failReasons?: FailReason[];
+  stageOutcomes?: LeadStageOutcome[];
   onConfirm: (details: FollowUpDetails) => Promise<void>;
   onCancel: () => void;
 }
 
-function defaultScheduledAt(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(10, 0, 0, 0);
-  return d.toISOString().slice(0, 16);
-}
-
 export function FollowUpScheduleModal({
   open,
-  newStatus,
+  newStage,
   orgUsers,
   currentUserId,
-  failReasons,
+  stageOutcomes,
   onConfirm,
   onCancel,
 }: Props) {
@@ -57,22 +39,22 @@ export function FollowUpScheduleModal({
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
   const [followUpNotes, setFollowUpNotes] = useState('');
   const [transitionNote, setTransitionNote] = useState('');
-  const [failReasonId, setFailReasonId] = useState<number | undefined>();
+  const [outcomeId, setOutcomeId] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
-  const needsFollowUp = newStatus.requiresFollowup;
-  const isRejection = newStatus.isRejection;
-  const statusLabel = newStatus.label;
+  const needsFollowUp = newStage.followupRequired;
+  const isRejected = newStage.isRejected;
+  const stageLabel = newStage.label;
   const nowIso = new Date().toISOString().slice(0, 16);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault();
     setError(null);
 
-    if (isRejection && !failReasonId) {
+    if (isRejected && !outcomeId) {
       setError('Please select a reason for rejecting this lead.');
       return;
     }
@@ -89,7 +71,7 @@ export function FollowUpScheduleModal({
     try {
       const details: FollowUpDetails = {
         transitionNote: transitionNote || undefined,
-        failReasonId,
+        outcomeId,
       };
       if (needsFollowUp) {
         details.followUp = {
@@ -113,11 +95,11 @@ export function FollowUpScheduleModal({
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              {needsFollowUp ? 'Schedule Follow-Up' : 'Confirm Status Change'}
+              {needsFollowUp ? 'Schedule Follow-Up' : 'Confirm Stage Change'}
             </h2>
             <p className="mt-0.5 text-sm text-gray-500">
               Moving lead to{' '}
-              <span className="font-medium text-indigo-600">{statusLabel}</span>
+              <span className="font-medium text-indigo-600">{stageLabel}</span>
             </p>
           </div>
           <button
@@ -130,20 +112,20 @@ export function FollowUpScheduleModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
 
-          {/* Fail reason — only for 'failed' status */}
-          {isRejection && failReasons && (
+          {/* Outcome — only for rejection stages */}
+          {isRejected && stageOutcomes && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Reason for failure <span className="text-red-500">*</span>
+                Reason for rejection <span className="text-red-500">*</span>
               </label>
               <select
-                value={failReasonId ?? ''}
-                onChange={(e) => setFailReasonId(Number(e.target.value))}
+                value={outcomeId ?? ''}
+                onChange={(e) => setOutcomeId(Number(e.target.value))}
                 required
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="" disabled>Select a reason…</option>
-                {failReasons.map((r) => (
+                {stageOutcomes.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.label}
                   </option>
@@ -161,7 +143,7 @@ export function FollowUpScheduleModal({
             <textarea
               value={transitionNote}
               onChange={(e) => setTransitionNote(e.target.value)}
-              placeholder={`Why is this lead being moved to ${statusLabel}?`}
+              placeholder={`Why is this lead being moved to ${stageLabel}?`}
               rows={2}
               className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />

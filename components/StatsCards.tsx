@@ -184,8 +184,8 @@ export default function StatsCards({ stats, leads, requiresFollowupStatuses, act
     const isSalesTier = actor.rank < RANKS.SSE;
     return {
       new:            leads.filter(l => l.Status === 'new').length,
-      callAttempted:  leads.filter(l => l.Status === 'contacted').length,
-      unqualified:    leads.filter(l => l.Status === 'failed').length,
+      callAttempted:  leads.filter(l => l.Status === 'contacting').length,
+      unqualified:    leads.filter(l => l.Status === 'unqualified').length,
       visitScheduled: leads.filter(l => l.Status === 'qualified').length,
       converted:      leads.filter(l => l.Status === 'converted').length,
       // Sales tier: only own assigned leads needing follow-up (not unassigned ones)

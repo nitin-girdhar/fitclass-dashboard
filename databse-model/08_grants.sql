@@ -136,8 +136,8 @@ FROM app_user;
 
 GRANT SELECT ON TABLE
     tenant_domains, tenant_plan_types, org_types, user_roles,
-    marketing_platforms, campaign_statuses, lead_statuses,
-    lead_fail_reasons, interaction_types, follow_up_statuses
+    marketing_platforms, campaign_statuses, lead_stage,
+    lead_stage_outcome, interaction_types, follow_up_statuses
 TO app_user;
 
 GRANT SELECT ON TABLE countries, states, cities TO app_user;
@@ -179,8 +179,8 @@ GRANT SELECT ON TABLE organizations TO tenant_admin;
 
 GRANT SELECT ON TABLE
     tenant_domains, tenant_plan_types, org_types, user_roles,
-    marketing_platforms, campaign_statuses, lead_statuses,
-    lead_fail_reasons, interaction_types, follow_up_statuses,
+    marketing_platforms, campaign_statuses, lead_stage,
+    lead_stage_outcome, interaction_types, follow_up_statuses,
     countries, states, cities
 TO tenant_admin;
 
@@ -223,3 +223,4 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT ON TABLES TO tenant_admin;
 
 COMMIT;
+

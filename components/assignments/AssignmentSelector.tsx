@@ -25,7 +25,7 @@ export default function AssignmentSelector({
   onChange,
   users,
   disabled,
-  label = 'Assignee',
+  label = 'Assigned To',
 }: Props) {
   return (
     <div className="flex flex-col gap-1.5">

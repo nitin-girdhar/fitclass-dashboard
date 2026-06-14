@@ -26,15 +26,14 @@ export interface SessionUser {
    * Privilege rank sourced from user_roles.rank in PostgreSQL (via JWT).
    * Higher = more access. Use this for all server-side permission checks
    * instead of looking up ROLE_RANK[user.role] from constants.
-   * Defaults to 0 on legacy Supabase path.
    */
   rank: number;
   orgId: string;
-  /** Human-readable org name. Populated on local-auth path; null for Supabase. */
+  /** Human-readable org name from organizations.name. */
   orgName?: string | null;
-  /** Human-readable tenant name. Populated on local-auth path; null for Supabase. */
+  /** Human-readable tenant name from tenants.name. */
   tenantName?: string | null;
-  /** Human-readable role label from user_roles.label. Populated on local-auth path. */
+  /** Human-readable role label from user_roles.label. */
   roleLabel?: string;
   /** Full display name (generated from first/middle/last). */
   name: string | null;

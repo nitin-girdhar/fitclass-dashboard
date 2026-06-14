@@ -8,10 +8,15 @@ BEGIN;
 -- MARKETING_LEADS
 -- ============================================================
 
--- Status-filtered paginated lead list: WHERE org_id=$1 AND status_id=$2 AND NOT is_deleted ORDER BY created_at DESC
-CREATE INDEX IF NOT EXISTS idx_marketing_leads_org_status_created
-    ON marketing_leads (org_id, status_id, created_at DESC)
+-- Stage-filtered paginated lead list: WHERE org_id=$1 AND stage_id=$2 AND NOT is_deleted ORDER BY created_at DESC
+CREATE INDEX IF NOT EXISTS idx_marketing_leads_org_stage_created
+    ON marketing_leads (org_id, stage_id, created_at DESC)
     WHERE NOT is_deleted;
+
+-- Reject-reason analytics: WHERE org_id=$1 AND outcome_id IS NOT NULL AND NOT is_deleted
+CREATE INDEX IF NOT EXISTS idx_marketing_leads_org_outcome
+    ON marketing_leads (org_id, outcome_id)
+    WHERE outcome_id IS NOT NULL AND NOT is_deleted;
 
 -- All-status paginated lead list: WHERE org_id=$1 AND NOT is_deleted ORDER BY created_at DESC
 CREATE INDEX IF NOT EXISTS idx_marketing_leads_org_created

@@ -92,12 +92,12 @@ export async function getLeads(
     );
 
     const total = rows[0] ? Number((rows[0] as any).total_count ?? 0) : 0;
-    const statusOptions =
-      await tx`SELECT id, name, label, requires_followup, is_rejection FROM lead_statuses ORDER BY id`;
-    const failReasons =
-      await tx`SELECT id, name, label FROM lead_fail_reasons ORDER BY id`;
+    const stageOptions =
+      await tx`SELECT id, name, label, followup_required, is_rejected, is_terminated FROM lead_stage ORDER BY display_order`;
+    const stageOutcomes =
+      await tx`SELECT id, name, label, stage_id, requires_comment FROM lead_stage_outcome ORDER BY display_order`;
 
-    return { leads: rows, total, statusOptions, failReasons, page, pageSize };
+    return { leads: rows, total, stageOptions, stageOutcomes, page, pageSize };
   };
 
   if (useMultiOrg) {
@@ -117,8 +117,8 @@ export async function getLeadById(
   return withOrgTx(orgId, userId, async (tx) => {
     const [lead] = await tx`
       SELECT ml.*,
-             ls.name   AS status_name,
-             lfr.name  AS fail_reason_name,
+             ls.name   AS stage_name,
+             lso.name  AS outcome_name,
              ac.name   AS campaign_name,
              mp.name   AS platform_name,
              u.full_name AS assigned_rep_name,
@@ -126,8 +126,8 @@ export async function getLeadById(
              st.name   AS state_name,
              co.name   AS country_name
       FROM marketing_leads ml
-      JOIN lead_statuses ls ON ls.id = ml.status_id
-      LEFT JOIN lead_fail_reasons lfr ON lfr.id = ml.fail_reason_id
+      JOIN lead_stage ls ON ls.id = ml.stage_id
+      LEFT JOIN lead_stage_outcome lso ON lso.id = ml.outcome_id
       LEFT JOIN ad_campaigns ac ON ac.id = ml.campaign_id
       LEFT JOIN marketing_platforms mp ON mp.id = ac.platform_id
       LEFT JOIN users u ON u.id = ml.assigned_user_id
@@ -153,8 +153,8 @@ export async function getLeadById(
 export async function createLead(orgId: string, userId: string, data: any) {
   return withOrgTx(orgId, userId, async (tx) => {
     const [statusRow] =
-      await tx`SELECT id FROM lead_statuses WHERE name = 'new'`;
-    if (!statusRow) throw new Error('Lead status "new" not found in lookup table');
+      await tx`SELECT id FROM lead_stage WHERE name = 'new'`;
+    if (!statusRow) throw new Error('Lead stage "new" not found in lookup table');
 
     // duplicateLeadId is resolved below; null means no digital match found.
     let duplicateLeadId: string | null = null;
@@ -194,7 +194,7 @@ export async function createLead(orgId: string, userId: string, data: any) {
     const [result] = await tx`
       INSERT INTO marketing_leads
         (org_id, first_name, middle_name, last_name, phone, email,
-         campaign_id, status_id, raw_webhook_data, metadata, tags,
+         campaign_id, stage_id, raw_webhook_data, metadata, tags,
          city_id, state_id, country_id, address_line1, pincode,
          assigned_user_id, duplicate_lead_id)
       VALUES
@@ -228,15 +228,15 @@ export async function createLead(orgId: string, userId: string, data: any) {
 export async function createLeadAsService(orgId: string, data: any) {
   return withServiceTx(async (tx) => {
     const rows = await tx.unsafe(
-      `SELECT id FROM lead_statuses WHERE name = 'new' LIMIT 1`,
+      `SELECT id FROM lead_stage WHERE name = 'new' LIMIT 1`,
     );
     const statusRow = rows[0] as { id: number } | undefined;
-    if (!statusRow) throw new Error('Lead status "new" not found in lookup table');
+    if (!statusRow) throw new Error('Lead stage "new" not found in lookup table');
 
     const result = await tx.unsafe(
       `INSERT INTO marketing_leads
          (org_id, first_name, middle_name, last_name, phone, email,
-          campaign_id, status_id, raw_webhook_data, metadata, tags,
+          campaign_id, stage_id, raw_webhook_data, metadata, tags,
           city_id, state_id, country_id, address_line1, pincode)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING id`,
@@ -271,19 +271,20 @@ export async function updateLead(
         throw new Error("Insufficient hierarchy authority to assign this lead");
     }
 
-    if (data.statusId !== undefined) {
-      const [statusRow] =
-        await tx`SELECT name FROM lead_statuses WHERE id = ${data.statusId}`;
-      if (statusRow?.name === "failed" && !data.failReasonId) {
+    if (data.stageId !== undefined) {
+      const [stageRow] =
+        await tx`SELECT is_rejected FROM lead_stage WHERE id = ${data.stageId}`;
+      if (stageRow?.is_rejected && !data.outcomeId) {
         throw new Error(
-          "A fail reason must be selected when marking a lead as failed.",
+          "An outcome must be selected when marking a lead as unqualified.",
         );
       }
     }
 
     const updates: Record<string, unknown> = {};
-    if (data.statusId !== undefined) updates.status_id = data.statusId;
-    if (data.failReasonId !== undefined) updates.fail_reason_id = data.failReasonId;
+    if (data.stageId !== undefined) updates.stage_id = data.stageId;
+    if (data.outcomeId !== undefined) updates.outcome_id = data.outcomeId;
+    if (data.outcomeComment !== undefined) updates.outcome_comment = data.outcomeComment;
     if (data.assignedUserId !== undefined) updates.assigned_user_id = data.assignedUserId;
     if (data.metadata !== undefined) updates.metadata = data.metadata;
     if (data.tags !== undefined) updates.tags = data.tags;

@@ -12,7 +12,7 @@
  *  senior_sales_executive
  *    → Leads · Assignments · Users · My Leads
  *
- *  sales_rep / sales_executive
+ *  sales_representative / sales_executive
  *    → Leads · My Leads
  *
  *  read_only
@@ -21,7 +21,8 @@
  *  Visibility here is UX ONLY — every destination listed enforces its own
  *  access on the server.
  */
-import type { UserRole } from '@/src/types/auth';
+import type { UserRole } from "@/src/types/auth";
+import { ROLE_TIERS } from "@/src/features/auth/constants";
 
 export interface NavItem {
   id: string;
@@ -32,48 +33,48 @@ export interface NavItem {
 }
 
 // ── Role tier aliases ─────────────────────────────────────────────────────────
-// New DB roles (AUTH_PROVIDER=local) listed alongside legacy Supabase roles so
-// both auth paths produce the correct nav without any runtime branching here.
-
-const ADMIN_ROLES: readonly UserRole[] = [
-  'super_admin', 'tenant_admin', 'org_admin', 'admin',
-];
-
-const MANAGER_ROLES: readonly UserRole[] = [
-  'org_manager', 'manager',
-];
-
-const SSE_ROLES: readonly UserRole[] = [
-  'senior_sales_executive',
-];
-
-const SE_ROLES: readonly UserRole[] = [
-  'sales_rep', 'sales_executive',
-];
-
-const READ_ONLY_ROLES: readonly UserRole[] = [
-  'read_only',
-];
+// Sourced from constants.ts — add new roles there, not here.
+const ADMIN_ROLES = ROLE_TIERS.ADMIN;
+const MANAGER_ROLES = ROLE_TIERS.MANAGER;
+const SSE_ROLES = ROLE_TIERS.SSE;
+const SE_ROLES = ROLE_TIERS.SE;
+const READ_ONLY_ROLES = ROLE_TIERS.READ_ONLY;
 
 export const DASHBOARD_NAV: readonly NavItem[] = [
   {
-    id: 'leads', label: 'Leads', href: '/dashboard/leads',
-    roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES, ...SE_ROLES, ...READ_ONLY_ROLES],
+    id: "leads",
+    label: "Leads",
+    href: "/dashboard/leads",
+    roles: [
+      ...ADMIN_ROLES,
+      ...MANAGER_ROLES,
+      ...SSE_ROLES,
+      ...SE_ROLES,
+      ...READ_ONLY_ROLES,
+    ],
   },
   {
-    id: 'assignments', label: 'Assignments', href: '/dashboard/assignments',
+    id: "assignments",
+    label: "Assignments",
+    href: "/dashboard/assignments",
     roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES],
   },
   {
-    id: 'users', label: 'Users', href: '/dashboard/users',
+    id: "users",
+    label: "Users",
+    href: "/dashboard/users",
     roles: [...ADMIN_ROLES, ...MANAGER_ROLES, ...SSE_ROLES],
   },
   {
-    id: 'analytics', label: 'Analytics', href: '/dashboard/analytics',
+    id: "analytics",
+    label: "Analytics",
+    href: "/dashboard/analytics",
     roles: [...ADMIN_ROLES],
   },
   {
-    id: 'my-leads', label: 'My Leads', href: '/dashboard/my-leads',
+    id: "my-leads",
+    label: "My Leads",
+    href: "/dashboard/my-leads",
     roles: [...SSE_ROLES, ...SE_ROLES],
   },
 ] as const;

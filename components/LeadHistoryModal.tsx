@@ -193,23 +193,23 @@ function GroupedEventCard({ group }: { group: EventGroup }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           <span>Status Updated</span>
-          {statusEv.oldStatus ? (
+          {statusEv.oldStage ? (
             <>
               <span className="text-[#94A3B8] font-normal">from</span>
-              <StatusPill name={statusEv.oldStatus} label={statusEv.oldStatusLabel} />
+              <StatusPill name={statusEv.oldStage} label={statusEv.oldStageLabel} />
               <span className="text-[#94A3B8] font-normal">to</span>
             </>
           ) : (
             <span className="text-[#94A3B8] font-normal">set to</span>
           )}
-          <StatusPill name={statusEv.newStatus} label={statusEv.newStatusLabel} />
+          <StatusPill name={statusEv.newStage} label={statusEv.newStageLabel} />
         </div>
       )}
 
-      {/* ── Fail reason ── */}
-      {statusEv?.newFailReason && (
+      {/* ── Outcome (rejection/follow-up reason) ── */}
+      {statusEv?.newOutcome && (
         <p className="pl-5 text-xs text-red-600">
-          Reason: <span className="font-semibold">{statusEv.newFailReasonLabel ?? statusEv.newFailReason.replace(/_/g, ' ')}</span>
+          Reason: <span className="font-semibold">{statusEv.newOutcomeLabel ?? statusEv.newOutcome.replace(/_/g, ' ')}</span>
         </p>
       )}
 

@@ -22,6 +22,7 @@ Run from the **project root**. This handles everything database-related in one g
 ```
 
 What it does:
+
 1. `npm install` — installs dependencies (needed before bcrypt step)
 2. Starts the `crm-postgres` Docker container (creates it if absent, starts it if stopped)
 3. Waits for Postgres to accept connections
@@ -38,9 +39,6 @@ Re-running is safe — the container check is idempotent and schema scripts use 
 Create `.env.local` in the project root with this content:
 
 ```dotenv
-AUTH_PROVIDER=local
-DB_PROVIDER=local
-
 DATABASE_URL=postgres://lead_svc:devpass@localhost:5433/crm
 DATABASE_URL_TENANT=postgres://tenant_dash_svc:devpass@localhost:5433/crm
 DATABASE_URL_SERVICE=postgres://service_role:devpass@localhost:5433/crm
@@ -76,14 +74,14 @@ Open http://localhost:3000 — it redirects to `/login`.
 
 All users below have password **`Admin@12345`** after the setup script.
 
-| Email                       | Role      | Org                            |
-| --------------------------- | --------- | ------------------------------ |
-| `vikram.malhotra@apexcp.in` | org_admin | FitClass – Connaught Place     |
-| `priya.kapoor@apexcp.in`    | sales_rep | FitClass – Connaught Place     |
-| `rahul.singh@apexcp.in`     | sales_rep | FitClass – Connaught Place     |
-| `ananya.verma@apexskt.in`   | org_admin | FitClass – Saket               |
-| `rajan.mehta@velvetkm.in`   | org_admin | Velvet Boutique – Khan Market  |
-| `deepa.nair@velvetln.in`    | org_admin | Velvet Boutique – Lajpat Nagar |
+| Email                       | Role                 | Org                            |
+| --------------------------- | -------------------- | ------------------------------ |
+| `vikram.malhotra@apexcp.in` | org_admin            | FitClass – Connaught Place     |
+| `priya.kapoor@apexcp.in`    | sales_representative | FitClass – Connaught Place     |
+| `rahul.singh@apexcp.in`     | sales_representative | FitClass – Connaught Place     |
+| `ananya.verma@apexskt.in`   | org_admin            | FitClass – Saket               |
+| `rajan.mehta@velvetkm.in`   | org_admin            | Velvet Boutique – Khan Market  |
+| `deepa.nair@velvetln.in`    | org_admin            | Velvet Boutique – Lajpat Nagar |
 
 **Start with `vikram.malhotra@apexcp.in`** — this org has the richest seed data.
 
@@ -190,5 +188,5 @@ FROM users WHERE email = 'vikram.malhotra@apexcp.in';
 
 Should show `has_pw = t`.
 
-**App starts but all API routes return 400**
-`AUTH_PROVIDER` is not set to `local` in `.env.local`. Check step 2.
+**App starts but `/api/leads` returns 401**
+`JWT_SECRET` may be missing or empty in `.env.local`. Check step 2.

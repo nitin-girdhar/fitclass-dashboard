@@ -4,7 +4,7 @@
  * Maps new PostgreSQL user_roles to permission levels:
  *  - super_admin, tenant_admin, org_admin → full access
  *  - org_manager, senior_sales_executive → branch/team-level
- *  - sales_rep → individual leads
+ *  - sales_representative → individual leads
  *  - read_only → view-only
  */
 import type { SessionUser } from "@/src/types/auth";
@@ -39,8 +39,8 @@ export function canViewLeadData(
   const managerRoles = ["org_manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
-  // sales_rep can view own leads + unassigned pool
-  if (user.role === "sales_rep") {
+  // sales_representative can view own leads + unassigned pool
+  if (user.role === "sales_representative") {
     return lead.assignedToUserId === user.id || !lead.assignedToUserId;
   }
 
@@ -62,8 +62,8 @@ export function canEditLead(
   const managerRoles = ["org_manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
-  // sales_rep can only edit own leads
-  if (user.role === "sales_rep") {
+  // sales_representative can only edit own leads
+  if (user.role === "sales_representative") {
     return lead.assignedToUserId === user.id;
   }
 
@@ -96,8 +96,8 @@ export function canAssignLead(
   const managerRoles = ["org_manager", "manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
-  // sales_rep can only self-assign from unassigned pool
-  if (user.role === "sales_rep" || user.role === "sales_executive") {
+  // sales_representative can only self-assign from unassigned pool
+  if (user.role === "sales_representative" || user.role === "sales_executive") {
     return !lead.assignedToUserId;
   }
 
@@ -107,12 +107,18 @@ export function canAssignLead(
 /**
  * Can the user create or modify ad campaigns?
  */
-export function canCreateCampaign(user: SessionUser | null | undefined): boolean {
+export function canCreateCampaign(
+  user: SessionUser | null | undefined,
+): boolean {
   if (!user || user.role === "read_only") return false;
 
   const allowed = [
-    "super_admin", "tenant_admin", "org_admin", "admin",
-    "org_manager", "manager",
+    "super_admin",
+    "tenant_admin",
+    "org_admin",
+    "admin",
+    "org_manager",
+    "manager",
   ];
   return allowed.includes(user.role);
 }
@@ -123,8 +129,6 @@ export function canCreateCampaign(user: SessionUser | null | undefined): boolean
 export function canManageUsers(user: SessionUser | null | undefined): boolean {
   if (!user) return false;
 
-  const allowed = [
-    "super_admin", "tenant_admin", "org_admin", "admin",
-  ];
+  const allowed = ["super_admin", "tenant_admin", "org_admin", "admin"];
   return allowed.includes(user.role);
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
+import { useDropdown } from '@/hooks/useDropdown';
 
 export interface SelectOption {
   id: string | number;
@@ -26,30 +27,7 @@ export default function MultiSelect({
   loading = false,
   disabled = false,
 }: Props) {
-  const [open, setOpen]     = useState(false);
-  const [search, setSearch] = useState('');
-  const rootRef             = useRef<HTMLDivElement>(null);
-  const searchRef           = useRef<HTMLInputElement>(null);
-
-  // Close on outside-click or Esc
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (open) queueMicrotask(() => searchRef.current?.focus());
-    else setSearch('');
-  }, [open]);
+  const { open, setOpen, search, setSearch, rootRef, searchInputRef } = useDropdown();
 
   const selectedIds = useMemo(() => new Set(selected.map((o) => o.id)), [selected]);
 
@@ -64,7 +42,7 @@ export default function MultiSelect({
     } else {
       onChange([...selected, opt]);
     }
-    searchRef.current?.focus();
+    searchInputRef.current?.focus();
   };
 
   const removeChip = (opt: SelectOption, e: React.MouseEvent) => {
@@ -118,7 +96,7 @@ export default function MultiSelect({
         >
           <div className="border-b border-[#F1F5F9] p-2">
             <input
-              ref={searchRef}
+              ref={searchInputRef}
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -147,7 +125,6 @@ export default function MultiSelect({
                   onClick={() => toggle(opt)}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-[#F8FAFC]"
                 >
-                  {/* Checkbox */}
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
                       checked

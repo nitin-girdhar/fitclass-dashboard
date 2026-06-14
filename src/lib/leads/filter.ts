@@ -12,11 +12,11 @@ import type { CardFilter } from '@/components/dashboard/LeadDashboardShell';
 export const FILTER_STATUSES: Record<CardFilter, string[] | null> = {
   all:            null,
   new:            ['new'],
-  callAttempted:  ['contacted'],
-  unqualified:    ['failed'],
+  callAttempted:  ['contacting'],
+  unqualified:    ['unqualified'],
   visitScheduled: ['qualified'],
   converted:      ['converted'],
-  followUp:       null, // resolved at runtime from lead_statuses.requires_followup
+  followUp:       null, // resolved at runtime from lead_stage.followup_required
   unassigned:     null, // resolved at runtime: assignedUserId === null
 };
 
@@ -27,10 +27,10 @@ export const FILTER_STATUSES: Record<CardFilter, string[] | null> = {
 export function applyLeadFilter(
   leads: readonly Lead[],
   filter: CardFilter,
-  requiresFollowupStatuses?: string[],
+  followupRequiredStages?: string[],
 ): Lead[] {
   if (filter === 'followUp') {
-    const set = new Set(requiresFollowupStatuses ?? []);
+    const set = new Set(followupRequiredStages ?? []);
     return leads.filter((l) => set.has(l.Status ?? ''));
   }
   if (filter === 'unassigned') {

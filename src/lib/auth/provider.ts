@@ -1,6 +1,8 @@
 /**
- * Auth provider abstraction layer.
- * Switches between Supabase and PostgreSQL-native auth based on AUTH_PROVIDER env var.
+ * Auth provider — unified PostgreSQL path.
+ *
+ * All user look-ups and last-login updates go directly to the PostgreSQL DB
+ * via db-user.ts. There is one execution path regardless of environment.
  */
 import {
   getUserByEmail as getDbUserByEmail,
@@ -9,48 +11,20 @@ import {
 } from "./db-user";
 import type { DbUser } from "./db-user";
 
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? "supabase";
-
-/**
- * Get user by email and optional org ID.
- * Returns null if not found.
- */
 export async function getUserByEmailFromProvider(
   email: string,
   orgId?: string,
 ): Promise<DbUser | null> {
-  if (AUTH_PROVIDER === "local") {
-    return getDbUserByEmail(email, orgId);
-  }
-  // For supabase provider, delegate to supabase-provider
-  const { getUserByEmailFromSupabase } = await import("./supabase-provider");
-  return getUserByEmailFromSupabase(email);
+  return getDbUserByEmail(email, orgId);
 }
 
-/**
- * Get user by ID.
- * Returns null if not found.
- */
-export async function getUserByIdFromProvider(
-  id: string,
-): Promise<DbUser | null> {
-  if (AUTH_PROVIDER === "local") {
-    return getDbUserById(id);
-  }
-  const { getUserByIdFromSupabase } = await import("./supabase-provider");
-  return getUserByIdFromSupabase(id);
+export async function getUserByIdFromProvider(id: string): Promise<DbUser | null> {
+  return getDbUserById(id);
 }
 
-/**
- * Update last login timestamp for a user.
- */
 export async function updateLastLoginFromProvider(
   userId: string,
   orgId: string,
 ): Promise<void> {
-  if (AUTH_PROVIDER === "local") {
-    return dbUpdateLastLogin(userId, orgId);
-  }
-  const { updateLastLoginFromSupabase } = await import("./supabase-provider");
-  return updateLastLoginFromSupabase(userId);
+  return dbUpdateLastLogin(userId, orgId);
 }

@@ -17,9 +17,9 @@
  * No I/O, no async — every predicate is sync and side-effect-free so it can
  * be called inside render and tight loops without thought.
  */
-import type { SessionUser, UserRole } from '@/src/types/auth';
-import { ROLE_RANK, isSalesRole } from '@/src/features/auth/constants';
-import { RANKS } from './ranks';
+import type { SessionUser, UserRole } from "@/src/types/auth";
+import { ROLE_RANK, isSalesRole } from "@/src/features/auth/constants";
+import { RANKS } from "./ranks";
 export { isSalesRole };
 
 // ── Role identity / hierarchy ────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export function canManageUsersView(
 /**
  * Hierarchical user-creation authority (Phase 2W — final spec).
  *
- *   actor \ target │ sr_mgr │ manager │ sse │ sales_rep
+ *   actor \ target │ sr_mgr │ manager │ sse │ sales_representative
  *   ───────────────┼────────┼─────────┼─────┼──────────
  *   admin (80)     │   ✓    │    ✓    │  ✓  │    ✓
  *   sr_manager(70) │   ✗    │    ✓    │  ✓  │    ✓
@@ -95,10 +95,7 @@ export function canManageUsersView(
  *  actor touch this user at all?) and against the patch's NEW role (may
  *  the actor place them there?). Both must be true.
  */
-export function canCreateUser(
-  actorRank: number,
-  targetRank: number,
-): boolean {
+export function canCreateUser(actorRank: number, targetRank: number): boolean {
   // Actor must strictly outrank target — no one can create a peer or superior.
   // MANAGER (60) is the minimum rank that can create any user at all.
   if (actorRank < RANKS.MANAGER) return false;
@@ -131,17 +128,20 @@ export function canViewUser(
   if (target.id === actor.id) return true;
   if (target.rank >= RANKS.ADMIN) return false;
 
-  // Branch overlap for legacy Supabase path.
-  // For new-DB users (org_id scoped), allowed_branches is [] on both sides
-  // — the DB query already scoped results to the same org, so treat it as overlap.
+  // allowed_branches is [] for org-scoped users (the DB query already scoped
+  // results). Two empty arrays → treat as overlap so managers can see their team.
   const overlaps =
     (target.allowed_branches.length > 0 &&
-      target.allowed_branches.some((b) => actor.allowed_branches.includes(b))) ||
-    (actor.allowed_branches.length === 0 && target.allowed_branches.length === 0);
+      target.allowed_branches.some((b) =>
+        actor.allowed_branches.includes(b),
+      )) ||
+    (actor.allowed_branches.length === 0 &&
+      target.allowed_branches.length === 0);
   if (!overlaps) return false;
 
   if (actor.rank >= RANKS.MANAGER) return true;
-  if (actor.rank === RANKS.SSE) return target.rank <= RANKS.SALES_REP;
+  if (actor.rank === RANKS.SSE)
+    return target.rank <= RANKS.sales_representative;
   return false;
 }
 
@@ -165,8 +165,8 @@ export function canAccessBranch(
   branch: string,
 ): boolean {
   if (!user) return false;
-  if (user.rank >= RANKS.ADMIN) return true;             // admin tier → unrestricted
-  if (user.allowed_branches.length === 0) return true;  // legacy unrestricted / new-DB org scope
+  if (user.rank >= RANKS.ADMIN) return true; // admin tier → unrestricted
+  if (user.allowed_branches.length === 0) return true; // legacy unrestricted / new-DB org scope
   return user.allowed_branches.includes(branch);
 }
 

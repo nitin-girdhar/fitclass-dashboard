@@ -17,7 +17,7 @@ function sortNewestFirst(leads: Lead[]): Lead[] {
   });
 }
 
-export interface FailReason { id: number; name: string; label: string; }
+export interface FailReason { id: number; name: string; label: string; stage_id: number; requires_comment: boolean; }
 
 interface UseLeadsReturn {
   leads: Lead[];
@@ -30,6 +30,7 @@ interface UseLeadsReturn {
   requiresFollowupStatuses: string[];
   rejectionStatuses: string[];
   failReasons: FailReason[];
+  stageNameToId: Record<string, number>;
   assignments: Record<number, AssignmentView>;
   updateLead: (payload: UpdatePayload) => Promise<void>;
   refetch: () => Promise<void>;
@@ -47,6 +48,7 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
   const [requiresFollowupStatuses, setRequiresFollowupStatuses] = useState<string[]>([]);
   const [rejectionStatuses, setRejectionStatuses] = useState<string[]>([]);
   const [failReasons, setFailReasons] = useState<FailReason[]>([]);
+  const [stageNameToId, setStageNameToId] = useState<Record<string, number>>({});
 
   const orgIdsRef      = useRef(orgIds);
   const platformsRef   = useRef(platforms);
@@ -75,6 +77,7 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
         requiresFollowupStatuses?: string[];
         rejectionStatuses?: string[];
         failReasons?: FailReason[];
+        stageNameToId?: Record<string, number>;
         assignments?: Record<number, AssignmentView>;
       } = await res.json();
 
@@ -91,6 +94,9 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
       }
       if (Array.isArray(json.failReasons)) {
         setFailReasons(json.failReasons);
+      }
+      if (json.stageNameToId && typeof json.stageNameToId === 'object') {
+        setStageNameToId(json.stageNameToId);
       }
       setAssignments(json.assignments ?? {});
       setLeads(sortNewestFirst(json.leads ?? []));
@@ -113,6 +119,7 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
     setRequiresFollowupStatuses([]);
     setRejectionStatuses([]);
     setFailReasons([]);
+    setStageNameToId({});
     setAssignments({});
     fetchData(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,10 +145,11 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            newStatus: payload.value,
-            ...(payload.followUp        ? { followUp: payload.followUp }                 : {}),
-            ...(payload.failReasonId != null ? { failReasonId: payload.failReasonId }    : {}),
-            ...(payload.transitionNote  ? { transitionNote: payload.transitionNote }     : {}),
+            newStage: payload.value,
+            ...(payload.followUp          ? { followUp: payload.followUp }                 : {}),
+            ...(payload.outcomeId != null ? { outcomeId: payload.outcomeId }               : {}),
+            ...(payload.outcomeComment    ? { outcomeComment: payload.outcomeComment }     : {}),
+            ...(payload.transitionNote    ? { transitionNote: payload.transitionNote }     : {}),
           }),
         });
       } else {
@@ -175,6 +183,7 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
     requiresFollowupStatuses,
     rejectionStatuses,
     failReasons,
+    stageNameToId,
     assignments,
     updateLead,
     refetch,

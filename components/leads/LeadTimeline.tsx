@@ -118,13 +118,13 @@ export function LeadTimeline({ leadId }: Props) {
                   {event.eventType === 'status_change' ? (
                     <p className="text-sm font-medium text-gray-900">
                       Status changed
-                      {event.oldStatus && (
+                      {event.oldStage && (
                         <span className="font-normal text-gray-500">
-                          {' '}from <StatusBadge status={event.oldStatus} />
+                          {' '}from <StatusBadge status={event.oldStage} />
                         </span>
                       )}
                       <span className="font-normal text-gray-500"> to </span>
-                      <StatusBadge status={event.newStatus!} />
+                      <StatusBadge status={event.newStage!} />
                     </p>
                   ) : (
                     <p className="text-sm font-medium text-gray-900">
@@ -158,9 +158,9 @@ export function LeadTimeline({ leadId }: Props) {
                 </p>
               )}
 
-              {event.newFailReason && (
+              {event.newOutcome && (
                 <p className="mt-1.5 text-xs text-red-600">
-                  Reason: {event.newFailReason.replace(/_/g, ' ')}
+                  Reason: {event.newOutcomeLabel ?? event.newOutcome.replace(/_/g, ' ')}
                 </p>
               )}
 

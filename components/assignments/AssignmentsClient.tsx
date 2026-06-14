@@ -22,7 +22,7 @@ const ASSIGNMENT_EXPORT_COLUMNS: ExportColumn<AssignmentView>[] = [
   { header: 'Name', value: (a) => a.lead_name ?? '' },
   { header: 'Phone', value: (a) => a.lead_phone ?? '' },
   { header: 'Branch', value: (a) => a.branch },
-  { header: 'Assignee', value: (a) => a.assignee_name ?? a.assignee_email ?? '' },
+  { header: 'Assigned To', value: (a) => a.assignee_name ?? a.assignee_email ?? '' },
   { header: 'Assignee Email', value: (a) => a.assignee_email ?? '' },
   { header: 'Assigned At', value: (a) => formatDate(a.assigned_at) },
   { header: 'Duplicate Lead ID', value: (a) => a.duplicate_lead_id ?? '' },
@@ -96,7 +96,7 @@ export default function AssignmentsClient({ actor, assignments, candidates, titl
         <div className="flex flex-wrap items-center gap-2 border-b border-[#F1F5F9] p-3 sm:p-4">
           <input
             type="search"
-            placeholder="Search name, phone, branch, or assignee…"
+            placeholder="Search name, phone, branch, or assigned to…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="min-w-[200px] flex-1 rounded-lg border border-[#E2E8F0] bg-white px-3 py-1.5 text-sm text-[#0F172A] shadow-sm focus:border-[#0b6cbf] focus:outline-none focus:ring-2 focus:ring-[#0b6cbf]/20"
@@ -114,7 +114,7 @@ export default function AssignmentsClient({ actor, assignments, candidates, titl
               <tr>
                 <th className="px-4 py-2.5">Lead</th>
                 <th className="px-4 py-2.5">Branch</th>
-                <th className="px-4 py-2.5">Assignee</th>
+                <th className="px-4 py-2.5">Assigned To</th>
                 <th className="px-4 py-2.5">Assigned at</th>
                 <th className="px-4 py-2.5">Duplicate Lead</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>

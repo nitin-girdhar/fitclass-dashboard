@@ -12,11 +12,7 @@
  * the mutation handlers refreshes this view after writes.
  */
 import { requireMinimumRole } from '@/src/lib/permissions/server';
-import { hasMinimumRole } from '@/src/lib/permissions';
-import {
-  getAssignmentsForBranches,
-  listAllAssignments,
-} from '@/src/features/assignments/queries';
+import { listAllAssignments } from '@/src/features/assignments/queries';
 import { listUsers } from '@/src/features/users/queries';
 import { toAssignmentViews } from '@/src/features/assignments/serializers';
 import { toSessionUser } from '@/src/features/users/serializers';
@@ -27,30 +23,15 @@ import type { SessionUser } from '@/src/types/auth';
 
 export const dynamic = 'force-dynamic';
 
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? 'supabase';
-
 export default async function AssignmentsPage() {
   // Lowest role with ANY assign authority is senior_sales_executive; the
   // fine-grained matrix runs below (and again server-side in the API).
   const actor = await requireMinimumRole('senior_sales_executive');
 
-  // ── Org-scope resolution ───────────────────────────────────────────────
-  // Local (PostgreSQL) path uses org-based scoping:
-  //   super_admin   → null (all orgs, all tenants)
-  //   tenant_admin  → all orgs within their tenant
-  //   org_admin+    → their own org only
-  //
-  // Supabase path keeps the old allowed_branches logic.
-  let orgIds: string[] | null = null;
-  if (AUTH_PROVIDER === 'local') {
-    orgIds = await resolveActorOrgIds(actor);
-  }
-
-  const rows = AUTH_PROVIDER === 'local'
-    ? await listAllAssignments(orgIds)
-    : (hasMinimumRole(actor, 'admin') || actor.allowed_branches.length === 0
-        ? await listAllAssignments()
-        : await getAssignmentsForBranches(actor.allowed_branches));
+  // Org-scope: super_admin → null (all tenants), tenant_admin → their tenant's
+  // orgs, everyone else → their own single org.
+  const orgIds = await resolveActorOrgIds(actor);
+  const rows = await listAllAssignments(orgIds);
   const assignments = toAssignmentViews(rows);
 
   // ── Candidate assignees ────────────────────────────────────────────────
@@ -61,22 +42,10 @@ export default async function AssignmentsPage() {
   // server-side in POST/PATCH /api/assignments — a crafted POST to assign
   // to an admin (or to yourself) will 403 even if the UI never shows that
   // option.
-  const allUsers = AUTH_PROVIDER === 'local'
-    ? (await listUsers(orgIds)).filter((u) => u.is_active)
-    : (await listUsers()).filter((u) => u.is_active);
-
+  const allUsers = (await listUsers(orgIds)).filter((u) => u.is_active);
   const candidates: SessionUser[] = allUsers
     .map(toSessionUser)
-    .filter((u) => canAssignToUser(actor.rank, u.rank, actor.id, u.id))
-    .filter((u) => {
-      if (AUTH_PROVIDER === 'local') return true; // org-scoped list already filtered above
-      if (hasMinimumRole(actor, 'admin')) return true;
-      // Supabase path: branch overlap for manager / SSE
-      return (
-        u.allowed_branches.length === 0 ||
-        u.allowed_branches.some((b) => actor.allowed_branches.includes(b))
-      );
-    });
+    .filter((u) => canAssignToUser(actor.rank, u.rank, actor.id, u.id));
 
   return (
     // Card-page padding (the dashboard `<main>` is padding-free).

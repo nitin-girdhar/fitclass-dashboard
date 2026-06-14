@@ -16,8 +16,6 @@ import { AppError, ValidationError, ForbiddenError } from "@/src/lib/errors";
 
 export const dynamic = "force-dynamic";
 
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? "supabase";
-
 // Simple API key to org mapping (in production, store in a table)
 const API_KEY_MAP: Record<string, string> = {
   // 'api-key-1': 'org-uuid-1',
@@ -26,13 +24,6 @@ const API_KEY_MAP: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    if (AUTH_PROVIDER !== "local") {
-      return NextResponse.json(
-        { error: "PostgreSQL auth not enabled" },
-        { status: 400 },
-      );
-    }
-
     // Extract and validate API key
     const apiKey = req.headers.get("x-api-key");
     if (!apiKey) {

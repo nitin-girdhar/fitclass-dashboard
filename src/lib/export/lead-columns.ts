@@ -72,7 +72,7 @@ export function buildLeadExportColumns(
     { header: 'Status', value: (l) => l.Status },
     { header: 'Remarks', value: (l) => l.Comments },
     {
-      header: 'Assignee',
+      header: 'Assigned To',
       value: (l) => {
         const a = assignments[l.rowIndex];
         if (!a) return '';

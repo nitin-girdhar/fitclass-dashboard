@@ -1,3 +1,4 @@
+
 BEGIN;
 
 /*
@@ -36,17 +37,17 @@ BEGIN;
     org_admin                          (level 0)
       ├── org_manager_A                (level 1)  ─┐
       │     ├── senior_sales_exec_1    (level 2)   │ Multiple org_managers
-      │     │     ├── sales_rep_1      (level 3)   │ in same org, each with
-      │     │     └── sales_rep_2      (level 3)   │ their own subtree.
+      │     │     ├── sales_representative_1      (level 3)   │ in same org, each with
+      │     │     └── sales_representative_2      (level 3)   │ their own subtree.
       │     └── senior_sales_exec_2    (level 2)   │
-      │           └── sales_rep_3      (level 3)  ─┘
+      │           └── sales_representative_3      (level 3)  ─┘
       └── org_manager_B                (level 1)
             └── senior_sales_exec_3    (level 2)
-                  ├── sales_rep_4      (level 3)
-                  └── sales_rep_5      (level 3)
+                  ├── sales_representative_4      (level 3)
+                  └── sales_representative_5      (level 3)
 
   The hierarchy depth is unlimited. Adding more levels (e.g. a "team lead"
-  between senior_sales_executive and sales_rep) requires only:
+  between senior_sales_executive and sales_representative) requires only:
     1. INSERT a new role into user_roles (one SQL row)
     2. Set manager_id correctly when creating users
     3. Optionally add the role to can_assign_to() if it should have subtree authority
@@ -57,7 +58,7 @@ BEGIN;
     org_sr_manager               → can assign to their entire subtree (all levels below)
     org_manager                  → can assign to their entire subtree (all levels below)
     senior_sales_executive       → can assign only to users within their own subtree
-    sales_rep / read_only        → can only self-assign (claim from unassigned pool)
+    sales_representative / read_only        → can only self-assign (claim from unassigned pool)
 
   HOW THE CONSOLE WORKS (Node.js API):
     1. GET /api/hierarchy/team?userId=<uuid>
@@ -300,7 +301,7 @@ BEGIN
         RETURN COALESCE(v_in_scope, FALSE);
     END IF;
 
-    -- sales_rep / read_only: cannot assign to others
+    -- sales_representative / read_only: cannot assign to others
     RETURN FALSE;
 END;
 $$;
@@ -376,7 +377,7 @@ SELECT
     manager_id,
     manager_full_name,
     hierarchy_level,
-    -- Breadcrumb path: "org_admin > org_manager > sales_rep"
+    -- Breadcrumb path: "org_admin > org_manager > sales_representative"
     array_to_string(path_names, ' > ') AS reporting_path,
     ancestor_ids
 FROM tree;

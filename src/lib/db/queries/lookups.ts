@@ -6,12 +6,12 @@ const _cache: Map<string, Map<string, number>> = new Map();
 
 // Tables that are safe to query by name — allowlist guards against injection.
 const LOOKUP_TABLES = new Set([
-  "lead_statuses",
+  "lead_stage",
   "marketing_platforms",
   "user_roles",
   "campaign_statuses",
   "follow_up_statuses",
-  "lead_fail_reasons",
+  "lead_stage_outcome",
   "interaction_types",
   "countries",
   "states",
@@ -27,22 +27,22 @@ const LOOKUP_TABLES = new Set([
 export async function getAllLookups() {
   return withServiceTx(async (tx) => {
     const [
-      statuses,
+      stages,
       platforms,
       roles,
       campaignStatuses,
       followUpStatuses,
-      failReasons,
+      stageOutcomes,
       interactionTypes,
       countries,
       states,
     ] = await Promise.all([
-      tx`SELECT id, name, description, label, requires_followup, is_rejection FROM lead_statuses ORDER BY id`,
+      tx`SELECT id, name, description, label, followup_required, is_rejected, is_terminated, display_order FROM lead_stage ORDER BY display_order`,
       tx`SELECT id, name, description FROM marketing_platforms ORDER BY id`,
       tx`SELECT id, name, label, description FROM user_roles ORDER BY rank DESC`,
       tx`SELECT id, name, description FROM campaign_statuses ORDER BY id`,
       tx`SELECT id, name, description FROM follow_up_statuses ORDER BY id`,
-      tx`SELECT id, name, description, label FROM lead_fail_reasons ORDER BY id`,
+      tx`SELECT id, name, label, description, requires_comment, display_order, stage_id FROM lead_stage_outcome ORDER BY display_order`,
       tx`SELECT id, name, description FROM interaction_types ORDER BY id`,
       tx`SELECT id, name, description FROM countries ORDER BY name`,
       tx`SELECT id, name, description FROM states ORDER BY name`,
@@ -50,12 +50,12 @@ export async function getAllLookups() {
 
     // Populate module cache while we have the data
     for (const [key, rows] of [
-      ["lead_statuses", statuses],
+      ["lead_stage", stages],
       ["marketing_platforms", platforms],
       ["user_roles", roles],
       ["campaign_statuses", campaignStatuses],
       ["follow_up_statuses", followUpStatuses],
-      ["lead_fail_reasons", failReasons],
+      ["lead_stage_outcome", stageOutcomes],
       ["interaction_types", interactionTypes],
       ["countries", countries],
       ["states", states],
@@ -66,12 +66,12 @@ export async function getAllLookups() {
     }
 
     return {
-      leadStatuses: statuses as LookupItem[],
+      leadStages: stages as LookupItem[],
       marketingPlatforms: platforms as LookupItem[],
       userRoles: roles as LookupItem[],
       campaignStatuses: campaignStatuses as LookupItem[],
       followUpStatuses: followUpStatuses as LookupItem[],
-      leadFailReasons: failReasons as LookupItem[],
+      leadStageOutcomes: stageOutcomes as LookupItem[],
       interactionTypes: interactionTypes as LookupItem[],
       countries: countries as LookupItem[],
       states: states as LookupItem[],

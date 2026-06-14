@@ -9,7 +9,6 @@
     "db:seed-admin": "node --env-file=.env.local --import tsx scripts/seed-admin.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.0",
     "ag-grid-community": "^35.3.0",
     "ag-grid-react": "^35.3.0",
     "bcryptjs": "^3.0.3",
@@ -19,7 +18,6 @@
     "postgres": "^3.4.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "ws": "^8.20.1",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
@@ -30,7 +28,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/ws": "^8.18.1",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
     "typescript": "^5"

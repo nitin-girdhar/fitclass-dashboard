@@ -1,5 +1,5 @@
 /**
- * Database row types — the exact shape of rows in Supabase/Postgres.
+ * Database row types — the exact shape of rows in PostgreSQL.
  *
  * Kept separate from `src/types/auth.ts`:
  *  - `auth.ts` = what the *app* passes around (SessionUser has NO password).
@@ -39,7 +39,7 @@ export interface DatabaseUser {
   mobile?: string | null;
   password_hash: string;
   role: UserRole;
-  /** Privilege rank from user_roles.rank. Present on PostgreSQL path; 0 on Supabase. */
+  /** Privilege rank from user_roles.rank via JOIN at query time. */
   rank: number;
   allowed_branches: string[];
   is_active: boolean;

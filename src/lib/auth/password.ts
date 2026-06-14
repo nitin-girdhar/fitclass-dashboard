@@ -17,6 +17,7 @@
  * (~tens of ms). Bump it over time as CPUs get faster; existing hashes remain
  * verifiable because the cost is encoded in the hash string itself.
  */
+import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 
 if (!process.env.BCRYPT_ROUNDS) throw new Error('BCRYPT_ROUNDS env var is not set');
@@ -45,4 +46,21 @@ export async function comparePassword(
   } catch {
     return false;
   }
+}
+
+/**
+ * Generate a temporary password that satisfies the strength policy:
+ *   4 uppercase hex chars + 4 lowercase hex chars + '@1'
+ *
+ * The '@1' suffix guarantees the policy requirements (uppercase ✓, lowercase ✓,
+ * digit ✓, special char ✓) regardless of random output.
+ * The caller is responsible for marking force_password_change = true so the
+ * user replaces this on first login.
+ */
+export function generateTemporaryPassword(): string {
+  return (
+    randomBytes(6).toString('hex').toUpperCase().slice(0, 4) +
+    randomBytes(6).toString('hex').slice(0, 4) +
+    '@1'
+  );
 }

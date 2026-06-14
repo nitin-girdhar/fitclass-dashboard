@@ -217,22 +217,22 @@ CREATE TRIGGER trg_lead_follow_ups_audit
     FOR EACH ROW EXECUTE FUNCTION audit_row_changes();
 
 -- ============================================================
--- LEAD STATUS TRANSITION TRIGGER
+-- LEAD STAGE TRANSITION TRIGGER
 -- SECURITY DEFINER: app_user has no INSERT on lead_status_log.
--- Fires on INSERT (first status assignment) and UPDATE of
--- status_id or fail_reason_id only.
+-- Fires on INSERT (first stage assignment) and UPDATE of
+-- stage_id or outcome_id only.
 -- transition_note is read from app.lead_transition_note session
 -- variable set by the API before the DML.
 -- ============================================================
-CREATE OR REPLACE FUNCTION log_lead_status_change()
+CREATE OR REPLACE FUNCTION log_lead_stage_change()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
     v_changed_by UUID;
     v_note       TEXT;
 BEGIN
     IF TG_OP = 'UPDATE' THEN
-        IF NEW.status_id IS NOT DISTINCT FROM OLD.status_id
-           AND NEW.fail_reason_id IS NOT DISTINCT FROM OLD.fail_reason_id THEN
+        IF NEW.stage_id IS NOT DISTINCT FROM OLD.stage_id
+           AND NEW.outcome_id IS NOT DISTINCT FROM OLD.outcome_id THEN
             RETURN NEW;
         END IF;
     END IF;
@@ -247,16 +247,16 @@ BEGIN
 
     INSERT INTO lead_status_log (
         org_id, lead_id,
-        old_status_id, new_status_id,
-        old_fail_reason_id, new_fail_reason_id,
+        old_stage_id, new_stage_id,
+        old_outcome_id, new_outcome_id,
         assigned_user_id, changed_by_id,
         transition_note
     ) VALUES (
         NEW.org_id, NEW.id,
-        CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.status_id END,
-        NEW.status_id,
-        CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.fail_reason_id END,
-        NEW.fail_reason_id,
+        CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.stage_id END,
+        NEW.stage_id,
+        CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.outcome_id END,
+        NEW.outcome_id,
         NEW.assigned_user_id,
         v_changed_by,
         v_note
@@ -267,8 +267,9 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS trg_lead_status_log ON marketing_leads;
-CREATE TRIGGER trg_lead_status_log
-    AFTER INSERT OR UPDATE OF status_id, fail_reason_id ON marketing_leads
-    FOR EACH ROW EXECUTE FUNCTION log_lead_status_change();
+DROP TRIGGER IF EXISTS trg_lead_stage_log  ON marketing_leads;
+CREATE TRIGGER trg_lead_stage_log
+    AFTER INSERT OR UPDATE OF stage_id, outcome_id ON marketing_leads
+    FOR EACH ROW EXECUTE FUNCTION log_lead_stage_change();
 
 COMMIT;

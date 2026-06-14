@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SessionUser } from '@/src/types/auth';
-import { RoleBadge } from './RoleBadge';
 
 interface Props {
   user: SessionUser;
@@ -89,16 +88,19 @@ export default function UserMenu({ user }: Props) {
           role="menu"
           className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-lg"
         >
-          <div className="border-b border-[#F1F5F9] px-4 py-3">
-            <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-semibold text-[#0F172A]">
-                {user.name ?? 'Signed in'}
-              </p>
-              <RoleBadge role={user.role} />
-            </div>
-            <p className="mt-0.5 truncate text-xs text-[#64748B]">{user.email}</p>
+          <div className="border-b border-[#F1F5F9] px-4 py-3 flex flex-col gap-0.5">
+            <p className="truncate text-sm font-semibold text-[#0F172A]">
+              {user.name ?? 'Signed in'}
+            </p>
+            <p className="truncate text-xs text-[#64748B]">
+              {user.roleLabel ?? user.role.replace(/_/g, ' ')}
+            </p>
+            <p className="truncate text-xs text-[#64748B]">{user.email}</p>
+            {user.mobile && (
+              <p className="truncate text-xs text-[#64748B]">{user.mobile}</p>
+            )}
             {(showTenant || showOrg) && (
-              <div className="mt-2 flex flex-col gap-0.5 border-t border-[#F1F5F9] pt-2">
+              <div className="mt-1.5 flex flex-col gap-0.5 border-t border-[#F1F5F9] pt-1.5">
                 {showTenant && (
                   <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
                     <span className="w-12 shrink-0 font-semibold text-[#94A3B8]">Tenant</span>

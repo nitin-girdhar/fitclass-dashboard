@@ -6,19 +6,14 @@
  *   reschedule — change scheduled_at (status → 'rescheduled'), optional notes
  *   add_note   — append text to existing notes without changing status
  */
-import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/src/lib/auth/session";
-import {
-  completeFollowUp,
-  rescheduleFollowUp,
-} from "@/src/lib/db/queries/followups";
+import { NextResponse, type NextRequest } from "next/server";
+import { withRoute } from "@/src/lib/api/route-handler";
+import { completeFollowUp, rescheduleFollowUp } from "@/src/lib/db/queries/followups";
 import { withOrgTx } from "@/src/lib/db/transaction";
-import { AppError, NotFoundError } from "@/src/lib/errors";
+import { NotFoundError } from "@/src/lib/errors";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
-
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? "supabase";
 
 const updateSchema = z.discriminatedUnion("action", [
   z.object({
@@ -36,21 +31,8 @@ const updateSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; followUpId: string }> },
-) {
-  try {
-    if (AUTH_PROVIDER !== "local") {
-      return NextResponse.json(
-        { error: "PostgreSQL auth not enabled" },
-        { status: 400 },
-      );
-    }
-
-    const gate = await requireSession();
-    if (!gate.ok) return gate.response;
-
+export const PATCH = withRoute<{ id: string; followUpId: string }>(
+  async (req: NextRequest, session, { followUpId }) => {
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
@@ -60,20 +42,13 @@ export async function PATCH(
       );
     }
 
-    const { followUpId } = await params;
-    const { orgId, id: userId } = gate.session;
+    const { orgId, id: userId } = session;
     const data = parsed.data;
 
     if (data.action === "complete") {
       await completeFollowUp(orgId, userId, followUpId, data.notes ?? null);
     } else if (data.action === "reschedule") {
-      await rescheduleFollowUp(
-        orgId,
-        userId,
-        followUpId,
-        data.scheduledAt,
-        data.notes ?? null,
-      );
+      await rescheduleFollowUp(orgId, userId, followUpId, data.scheduledAt, data.notes ?? null);
     } else {
       // add_note: append to existing notes, preserving history
       await withOrgTx(orgId, userId, async (tx) => {
@@ -93,17 +68,5 @@ export async function PATCH(
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
-  } catch (err) {
-    console.error("[PATCH /api/leads/[id]/follow-ups/[followUpId]]", err);
-    if (err instanceof AppError) {
-      return NextResponse.json(
-        { error: err.message },
-        { status: err.statusCode },
-      );
-    }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
-}
+  },
+);

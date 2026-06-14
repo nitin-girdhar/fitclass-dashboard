@@ -26,10 +26,16 @@ SELECT
     st.name                     AS state,
     co.name                     AS country,
     -- CRM state
-    ls.name                     AS status,
-    ls.label                    AS status_label,
-    lfr.name                    AS fail_reason,       -- NULL unless status = 'failed'
-    lfr.label                   AS fail_reason_label,
+    ls.name                     AS stage,
+    ls.label                    AS stage_label,
+    ls.followup_required,
+    ls.is_rejected,
+    ls.is_terminated,
+    lso.name                    AS outcome,
+    lso.label                   AS outcome_label,
+    ml.outcome_comment,
+    ml.stage_id,
+    ml.outcome_id,
     ac.name                     AS campaign_name,     -- NULL for organic leads
     mp.name                     AS platform,          -- NULL for organic leads
     u.full_name                 AS assigned_rep_name,
@@ -45,8 +51,8 @@ SELECT
     ml.campaign_id
 FROM  marketing_leads        ml
 JOIN  organizations           o   ON o.id    = ml.org_id
-JOIN  lead_statuses           ls  ON ls.id   = ml.status_id
-LEFT JOIN lead_fail_reasons   lfr ON lfr.id  = ml.fail_reason_id
+JOIN  lead_stage              ls  ON ls.id   = ml.stage_id
+LEFT JOIN lead_stage_outcome  lso ON lso.id  = ml.outcome_id
 LEFT JOIN ad_campaigns        ac  ON ac.id   = ml.campaign_id
 LEFT JOIN marketing_platforms mp  ON mp.id   = ac.platform_id
 LEFT JOIN users               u   ON u.id    = ml.assigned_user_id
@@ -106,19 +112,19 @@ CREATE OR REPLACE VIEW vw_tenant_campaign_summary WITH (security_invoker = true)
 WITH campaign_lead_stats AS (
     SELECT
         sub.campaign_id,
-        SUM(sub.status_cnt)::INT                                            AS total_leads,
+        SUM(sub.stage_cnt)::INT                                             AS total_leads,
         COALESCE(
-            SUM(sub.status_cnt) FILTER (WHERE ls.name = 'converted'), 0
+            SUM(sub.stage_cnt) FILTER (WHERE ls.name = 'converted'), 0
         )::INT                                                              AS converted_leads,
-        jsonb_object_agg(ls.name, sub.status_cnt)                          AS leads_by_status
+        jsonb_object_agg(ls.name, sub.stage_cnt)                           AS leads_by_stage
     FROM (
-        SELECT campaign_id, status_id, COUNT(*) AS status_cnt
+        SELECT campaign_id, stage_id, COUNT(*) AS stage_cnt
         FROM   marketing_leads
         WHERE  campaign_id IS NOT NULL
           AND  NOT is_deleted
-        GROUP  BY campaign_id, status_id
+        GROUP  BY campaign_id, stage_id
     ) sub
-    JOIN lead_statuses ls ON ls.id = sub.status_id
+    JOIN lead_stage ls ON ls.id = sub.stage_id
     GROUP BY sub.campaign_id
 )
 SELECT
@@ -131,7 +137,7 @@ SELECT
     cs.name                                                                 AS campaign_status,
     ac.budget,
     COALESCE(cls.total_leads, 0)::INT                                       AS total_leads,
-    COALESCE(cls.leads_by_status, '{}'::jsonb)                              AS leads_by_status,
+    COALESCE(cls.leads_by_stage, '{}'::jsonb)                               AS leads_by_stage,
     CASE
         WHEN COALESCE(cls.total_leads, 0) = 0 THEN 0::NUMERIC(5,2)
         ELSE ROUND(
@@ -167,16 +173,15 @@ CREATE OR REPLACE VIEW vw_tenant_full_dashboard WITH (security_invoker = true) A
 WITH org_leads AS (
     SELECT
         ml.org_id,
-        COUNT(*)                                            AS total_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'new')            AS new_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'contacted')      AS contacted_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'qualified')      AS qualified_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'converted')      AS converted_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'failed')         AS failed_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'on_hold')        AS on_hold_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'nurturing')      AS nurturing_leads
+        COUNT(*)                                               AS total_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'new')               AS new_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'contacting')        AS contacting_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'qualified')         AS qualified_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'converted')         AS converted_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'unqualified')       AS unqualified_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'transferred_out')   AS transferred_out_leads
     FROM marketing_leads ml
-    JOIN lead_statuses   ls ON ls.id = ml.status_id
+    JOIN lead_stage      ls ON ls.id = ml.stage_id
     WHERE NOT ml.is_deleted
     GROUP BY ml.org_id
 ),
@@ -228,15 +233,14 @@ SELECT
     o.address_line1,
     ci.name                                                 AS city,
     st.name                                                 AS state,
-    -- Lead funnel
-    COALESCE(ol.total_leads,      0)::INT                   AS total_leads,
-    COALESCE(ol.new_leads,        0)::INT                   AS new_leads,
-    COALESCE(ol.contacted_leads,  0)::INT                   AS contacted_leads,
-    COALESCE(ol.qualified_leads,  0)::INT                   AS qualified_leads,
-    COALESCE(ol.converted_leads,  0)::INT                   AS converted_leads,
-    COALESCE(ol.failed_leads,     0)::INT                   AS failed_leads,
-    COALESCE(ol.on_hold_leads,    0)::INT                   AS on_hold_leads,
-    COALESCE(ol.nurturing_leads,  0)::INT                   AS nurturing_leads,
+    -- Lead funnel (on_hold_leads and nurturing_leads removed — no equivalent stages)
+    COALESCE(ol.total_leads,           0)::INT              AS total_leads,
+    COALESCE(ol.new_leads,             0)::INT              AS new_leads,
+    COALESCE(ol.contacting_leads,      0)::INT              AS contacting_leads,
+    COALESCE(ol.qualified_leads,       0)::INT              AS qualified_leads,
+    COALESCE(ol.converted_leads,       0)::INT              AS converted_leads,
+    COALESCE(ol.unqualified_leads,     0)::INT              AS unqualified_leads,
+    COALESCE(ol.transferred_out_leads, 0)::INT              AS transferred_out_leads,
     -- Conversion rate
     CASE
         WHEN COALESCE(ol.total_leads, 0) = 0 THEN 0::NUMERIC(5,2)
@@ -277,11 +281,11 @@ CREATE OR REPLACE VIEW vw_org_performance_snapshot WITH (security_invoker = true
 WITH lead_counts AS (
     SELECT
         ml.org_id,
-        COUNT(*)                                            AS total_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'converted')      AS converted_leads,
-        COUNT(*) FILTER (WHERE ls.name = 'failed')         AS failed_leads
+        COUNT(*)                                               AS total_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'converted')         AS converted_leads,
+        COUNT(*) FILTER (WHERE ls.name = 'unqualified')       AS unqualified_leads
     FROM  marketing_leads ml
-    JOIN  lead_statuses   ls ON ls.id = ml.status_id
+    JOIN  lead_stage      ls ON ls.id = ml.stage_id
     WHERE NOT ml.is_deleted
     GROUP BY ml.org_id
 ),
@@ -324,9 +328,9 @@ SELECT
     o.id                                                    AS org_id,
     o.name                                                  AS org_name,
     o.tenant_id,
-    COALESCE(lc.total_leads,     0)::INT                    AS total_leads,
-    COALESCE(lc.converted_leads, 0)::INT                    AS converted_leads,
-    COALESCE(lc.failed_leads,    0)::INT                    AS failed_leads,
+    COALESCE(lc.total_leads,       0)::INT                  AS total_leads,
+    COALESCE(lc.converted_leads,   0)::INT                  AS converted_leads,
+    COALESCE(lc.unqualified_leads, 0)::INT                  AS unqualified_leads,
     CASE
         WHEN COALESCE(ist.leads_with_interactions, 0) = 0 THEN 0::NUMERIC(5,2)
         ELSE ROUND(
@@ -358,14 +362,14 @@ SELECT
     lsl.changed_at              AS event_at,
     cb.full_name                AS actor_name,
     cb.email                    AS actor_email,
-    os.name                     AS old_status,
-    os.label                    AS old_status_label,
-    ns.name                     AS new_status,
-    ns.label                    AS new_status_label,
-    ofr.name                    AS old_fail_reason,
-    ofr.label                   AS old_fail_reason_label,
-    nfr.name                    AS new_fail_reason,
-    nfr.label                   AS new_fail_reason_label,
+    os.name                     AS old_stage,
+    os.label                    AS old_stage_label,
+    ns.name                     AS new_stage,
+    ns.label                    AS new_stage_label,
+    ofr.name                    AS old_outcome,
+    ofr.label                   AS old_outcome_label,
+    nfr.name                    AS new_outcome,
+    nfr.label                   AS new_outcome_label,
     au.full_name                AS assigned_to_name,
     lsl.transition_note         AS note,
     NULL::uuid                  AS followup_id,
@@ -373,13 +377,13 @@ SELECT
     NULL::timestamptz           AS scheduled_at,
     NULL::timestamptz           AS completed_at,
     NULL::text                  AS interaction_type
-FROM  lead_status_log         lsl
-LEFT JOIN users               cb  ON cb.id  = lsl.changed_by_id
-LEFT JOIN lead_statuses       os  ON os.id  = lsl.old_status_id
-JOIN  lead_statuses           ns  ON ns.id  = lsl.new_status_id
-LEFT JOIN lead_fail_reasons   ofr ON ofr.id = lsl.old_fail_reason_id
-LEFT JOIN lead_fail_reasons   nfr ON nfr.id = lsl.new_fail_reason_id
-LEFT JOIN users               au  ON au.id  = lsl.assigned_user_id
+FROM  lead_status_log           lsl
+LEFT JOIN users                 cb  ON cb.id  = lsl.changed_by_id
+LEFT JOIN lead_stage            os  ON os.id  = lsl.old_stage_id
+JOIN  lead_stage                ns  ON ns.id  = lsl.new_stage_id
+LEFT JOIN lead_stage_outcome    ofr ON ofr.id = lsl.old_outcome_id
+LEFT JOIN lead_stage_outcome    nfr ON nfr.id = lsl.new_outcome_id
+LEFT JOIN users                 au  ON au.id  = lsl.assigned_user_id
 
 UNION ALL
 
@@ -391,14 +395,14 @@ SELECT
     COALESCE(lf.completed_at, lf.scheduled_at) AS event_at,
     u.full_name                 AS actor_name,
     u.email                     AS actor_email,
-    NULL::text                  AS old_status,
-    NULL::text                  AS old_status_label,
-    NULL::text                  AS new_status,
-    NULL::text                  AS new_status_label,
-    NULL::text                  AS old_fail_reason,
-    NULL::text                  AS old_fail_reason_label,
-    NULL::text                  AS new_fail_reason,
-    NULL::text                  AS new_fail_reason_label,
+    NULL::text                  AS old_stage,
+    NULL::text                  AS old_stage_label,
+    NULL::text                  AS new_stage,
+    NULL::text                  AS new_stage_label,
+    NULL::text                  AS old_outcome,
+    NULL::text                  AS old_outcome_label,
+    NULL::text                  AS new_outcome,
+    NULL::text                  AS new_outcome_label,
     u.full_name                 AS assigned_to_name,
     lf.notes                    AS note,
     lf.id                       AS followup_id,
@@ -421,14 +425,14 @@ SELECT
     li.occurred_at              AS event_at,
     u.full_name                 AS actor_name,
     u.email                     AS actor_email,
-    NULL::text                  AS old_status,
-    NULL::text                  AS old_status_label,
-    NULL::text                  AS new_status,
-    NULL::text                  AS new_status_label,
-    NULL::text                  AS old_fail_reason,
-    NULL::text                  AS old_fail_reason_label,
-    NULL::text                  AS new_fail_reason,
-    NULL::text                  AS new_fail_reason_label,
+    NULL::text                  AS old_stage,
+    NULL::text                  AS old_stage_label,
+    NULL::text                  AS new_stage,
+    NULL::text                  AS new_stage_label,
+    NULL::text                  AS old_outcome,
+    NULL::text                  AS old_outcome_label,
+    NULL::text                  AS new_outcome,
+    NULL::text                  AS new_outcome_label,
     NULL::text                  AS assigned_to_name,
     li.notes                    AS note,
     NULL::uuid                  AS followup_id,
@@ -452,14 +456,14 @@ SELECT
     mlh.changed_at              AS event_at,
     cu.full_name                AS actor_name,
     cu.email                    AS actor_email,
-    NULL::text                  AS old_status,
-    NULL::text                  AS old_status_label,
-    NULL::text                  AS new_status,
-    NULL::text                  AS new_status_label,
-    NULL::text                  AS old_fail_reason,
-    NULL::text                  AS old_fail_reason_label,
-    NULL::text                  AS new_fail_reason,
-    NULL::text                  AS new_fail_reason_label,
+    NULL::text                  AS old_stage,
+    NULL::text                  AS old_stage_label,
+    NULL::text                  AS new_stage,
+    NULL::text                  AS new_stage_label,
+    NULL::text                  AS old_outcome,
+    NULL::text                  AS old_outcome_label,
+    NULL::text                  AS new_outcome,
+    NULL::text                  AS new_outcome_label,
     COALESCE(new_u.full_name, 'Unassigned') AS assigned_to_name,
     CASE
         WHEN old_u.full_name IS NULL AND new_u.full_name IS NOT NULL
@@ -496,8 +500,8 @@ SELECT
     ml.full_name                    AS lead_full_name,
     ml.phone                        AS lead_phone,
     ml.email                        AS lead_email,
-    ls.name                         AS lead_status,
-    ls.label                        AS lead_status_label,
+    ls.name                         AS lead_stage,
+    ls.label                        AS lead_stage_label,
     ml.tags                         AS lead_tags,
     u.id                            AS assigned_rep_id,
     u.full_name                     AS assigned_rep_name,
@@ -520,7 +524,7 @@ SELECT
     last_ix.type_name               AS last_interaction_type
 FROM  lead_follow_ups             lf
 JOIN  marketing_leads              ml  ON ml.id  = lf.lead_id
-JOIN  lead_statuses                ls  ON ls.id  = ml.status_id
+JOIN  lead_stage                   ls  ON ls.id  = ml.stage_id
 JOIN  follow_up_statuses           fs  ON fs.id  = lf.status_id
 JOIN  users                        u   ON u.id   = lf.assigned_user_id
 JOIN  organizations                o   ON o.id   = lf.org_id

@@ -1,22 +1,16 @@
 /**
  * Assignment WRITE layer. SERVER-ONLY.
  *
- * Each helper performs the DB mutation AND emits the matching audit row
- * (via never-throw helpers from src/features/activities). Audit writes
- * cannot fail the business operation.
+ * Assignments live on marketing_leads.assigned_user_id — there is no
+ * separate `assignments` table. The "assignment id" == marketing_lead.id.
  *
- * One row per lead is enforced by a DB-level UNIQUE INDEX on lead_id
- * (see migration 20260521000000). A duplicate insert surfaces as a
- * DatabaseError with kind='unique_violation' which the API layer turns
- * into a 409 — callers in this module don't handle it; routes do.
+ * Each helper performs the DB mutation AND emits the matching audit row.
+ * Audit writes cannot fail the business operation (errors are swallowed
+ * inside the log helpers themselves).
  */
-import { getSupabaseAdmin } from '@/src/lib/db/supabase';
-import { fromPostgrestError, notFound } from '@/src/lib/db/errors';
-import type {
-  Assignment,
-  AssignmentInsert,
-  AssignmentUpdate,
-} from '@/src/types/database';
+import { withServiceTx } from '@/src/lib/db/transaction';
+import { fromPgError, DatabaseError, notFound } from '@/src/lib/db/errors';
+import type { Assignment } from '@/src/types/database';
 import type { AssignmentRowWithAssignee } from './serializers';
 import {
   logAssignmentCreated,
@@ -24,22 +18,55 @@ import {
   logAssignmentRemoved,
 } from '@/src/features/activities/mutations';
 
-const ASSIGNMENTS_TABLE = 'assignments';
+// ── Shared fetch helper ───────────────────────────────────────────────────────
 
-// Phase 2U: mutation responses also embed the assignee — the API route
-// passes the result straight into `toAssignmentView` which expects the
-// joined shape, and the picker UI displays the assignee name immediately
-// after a successful POST/PATCH without waiting for a refetch.
-const SELECT_WITH_ASSIGNEE = '*, assignee:users!assigned_to(name, email)';
+async function fetchAssignedLead(
+  tx: any,
+  leadId: string,
+): Promise<AssignmentRowWithAssignee | null> {
+  const rows = await tx.unsafe(
+    `SELECT
+       ml.id                                          AS id,
+       ml.id                                          AS lead_id,
+       ml.full_name                                   AS lead_name,
+       ml.phone                                       AS lead_phone,
+       COALESCE(o.name, '')                           AS branch,
+       ml.assigned_user_id::text                     AS assigned_to,
+       ''                                             AS assigned_by,
+       COALESCE(ml.updated_at, ml.created_at)::text  AS assigned_at,
+       NULL::text                                     AS notes,
+       u.full_name                                    AS assignee_name,
+       u.email                                        AS assignee_email
+     FROM marketing_leads ml
+     JOIN users u ON u.id = ml.assigned_user_id
+     LEFT JOIN organizations o ON o.id = ml.org_id
+     WHERE ml.id = $1::uuid AND ml.assigned_user_id IS NOT NULL AND NOT ml.is_deleted
+     LIMIT 1`,
+    [leadId],
+  );
 
-function asJoined(row: unknown): AssignmentRowWithAssignee {
-  return row as AssignmentRowWithAssignee;
+  if (!rows.length) return null;
+  const r = rows[0] as any;
+  return {
+    id:          r.id          as string,
+    lead_id:     r.lead_id     as string,
+    lead_name:   (r.lead_name  ?? null) as string | null,
+    lead_phone:  (r.lead_phone ?? null) as string | null,
+    branch:      r.branch      as string,
+    assigned_to: r.assigned_to as string,
+    assigned_by: ''            as string,
+    assigned_at: String(r.assigned_at ?? ''),
+    notes:       null,
+    duplicate_lead_id:       null,
+    duplicate_lead_platform: null,
+    assignee: {
+      name:  (r.assignee_name  ?? null) as string | null,
+      email: (r.assignee_email ?? '')   as string,
+    },
+  };
 }
-// Audit snapshots only need the bare DB fields (no assignee embed); kept
-// separate so log payloads stay stable across UI changes.
-function asAssignment(row: unknown): Assignment {
-  return row as Assignment;
-}
+
+// ── Mutations ─────────────────────────────────────────────────────────────────
 
 interface AssignLeadInput {
   leadId: string;
@@ -50,100 +77,107 @@ interface AssignLeadInput {
 }
 
 /**
- * Create a NEW assignment for a lead that has none. If the lead already has
- * an owner, the DB unique index throws (caller surfaces 409 + suggests
- * `reassignLead` instead).
+ * Assign a lead that currently has no owner. Throws unique_violation if the
+ * lead is already assigned (caller surfaces 409 + suggests reassignLead).
  */
 export async function assignLead(
   input: AssignLeadInput,
 ): Promise<AssignmentRowWithAssignee> {
-  const payload: AssignmentInsert = {
-    lead_id: input.leadId,
-    branch: input.branch,
-    assigned_to: input.assignedTo,
-    assigned_by: input.assignedBy,
-    notes: input.notes ?? null,
-  };
+  return withServiceTx(async (tx) => {
+    try {
+      // Atomic CAS: only succeeds when assigned_user_id IS NULL
+      const updated = await tx.unsafe(
+        `UPDATE marketing_leads
+         SET assigned_user_id = $1::uuid, updated_at = CLOCK_TIMESTAMP()
+         WHERE id = $2::uuid AND assigned_user_id IS NULL AND NOT is_deleted
+         RETURNING id`,
+        [input.assignedTo, input.leadId],
+      );
 
-  const { data, error } = await getSupabaseAdmin()
-    .from(ASSIGNMENTS_TABLE)
-    .insert(payload)
-    .select(SELECT_WITH_ASSIGNEE)
-    .single();
+      if (!updated.length) {
+        // Distinguish "not found" from "already assigned"
+        const [existing] = await tx.unsafe(
+          `SELECT assigned_user_id
+           FROM marketing_leads
+           WHERE id = $1::uuid AND NOT is_deleted LIMIT 1`,
+          [input.leadId],
+        );
+        if (!existing) throw notFound('Lead');
+        throw new DatabaseError(
+          'unique_violation',
+          'A record with these unique values already exists',
+        );
+      }
 
-  if (error) throw fromPostgrestError(error);
-  const row = asJoined(data);
+      const row = await fetchAssignedLead(tx, input.leadId);
+      if (!row) throw notFound('Lead assignment');
 
-  await logAssignmentCreated(input.assignedBy, input.leadId, {
-    assignment_id: row.id,
-    branch: row.branch,
-    assigned_to: row.assigned_to,
-    notes: row.notes,
+      await logAssignmentCreated(input.assignedBy, input.leadId, {
+        assignment_id: row.id,
+        branch: row.branch,
+        assigned_to: row.assigned_to,
+        notes: null,
+      });
+
+      return row;
+    } catch (err) {
+      if (err instanceof DatabaseError) throw err;
+      throw fromPgError(err);
+    }
   });
-
-  return row;
 }
 
 interface ReassignInput {
-  /** Existing assignment row id. */
+  /** marketing_lead.id (= assignment id in current schema). */
   id: string;
-  /** New owner. */
   assignedTo: string;
-  /** Actor performing the reassignment (for audit + assigned_by stamp). */
   actorId: string;
   notes?: string | null;
 }
 
 /**
- * Reassign an existing assignment. Performs the update in-place (keeps the
- * same `id`) so other tables / future references stay stable. The previous
- * owner is captured in the audit row's `old_value`.
+ * Reassign an existing assignment to a new owner. Keeps the same lead id so
+ * all external references (audit rows, UI) remain stable.
  */
 export async function reassignLead(
   input: ReassignInput,
 ): Promise<AssignmentRowWithAssignee> {
-  // Read the current row (bare shape; only needed for the audit snapshot).
-  const { data: existingRow, error: readErr } = await getSupabaseAdmin()
-    .from(ASSIGNMENTS_TABLE)
-    .select('*')
-    .eq('id', input.id)
-    .maybeSingle();
-  if (readErr) throw fromPostgrestError(readErr);
-  if (!existingRow) throw notFound('Assignment');
-  const before = asAssignment(existingRow);
+  return withServiceTx(async (tx) => {
+    try {
+      const before = await fetchAssignedLead(tx, input.id);
+      if (!before) throw notFound('Assignment');
 
-  const patch: AssignmentUpdate = {
-    assigned_to: input.assignedTo,
-    assigned_by: input.actorId,
-    notes: input.notes ?? before.notes,
-  };
+      await tx.unsafe(
+        `UPDATE marketing_leads
+         SET assigned_user_id = $1::uuid, updated_at = CLOCK_TIMESTAMP()
+         WHERE id = $2::uuid AND NOT is_deleted`,
+        [input.assignedTo, input.id],
+      );
 
-  const { data, error } = await getSupabaseAdmin()
-    .from(ASSIGNMENTS_TABLE)
-    .update(patch)
-    .eq('id', input.id)
-    .select(SELECT_WITH_ASSIGNEE)
-    .single();
+      const after = await fetchAssignedLead(tx, input.id);
+      if (!after) throw notFound('Lead assignment');
 
-  if (error) throw fromPostgrestError(error);
-  const after = asJoined(data);
+      await logAssignmentReassigned(
+        input.actorId,
+        after.lead_id,
+        {
+          assignment_id: before.id,
+          assigned_to: before.assigned_to,
+          assigned_by: before.assigned_by,
+        },
+        {
+          assignment_id: after.id,
+          assigned_to: after.assigned_to,
+          assigned_by: after.assigned_by,
+        },
+      );
 
-  await logAssignmentReassigned(
-    input.actorId,
-    after.lead_id,
-    {
-      assignment_id: before.id,
-      assigned_to: before.assigned_to,
-      assigned_by: before.assigned_by,
-    },
-    {
-      assignment_id: after.id,
-      assigned_to: after.assigned_to,
-      assigned_by: after.assigned_by,
-    },
-  );
-
-  return after;
+      return after;
+    } catch (err) {
+      if (err instanceof DatabaseError) throw err;
+      throw fromPgError(err);
+    }
+  });
 }
 
 interface UnassignInput {
@@ -152,29 +186,34 @@ interface UnassignInput {
 }
 
 /**
- * Delete the assignment row entirely. Lead returns to "unowned". Audit row
- * captures who/what was removed so admins can reconstruct ownership history.
+ * Unassign a lead (set assigned_user_id = NULL). Lead returns to "unowned".
+ * Audit row captures who/what was removed.
  */
 export async function unassignLead(input: UnassignInput): Promise<void> {
-  const { data: existingRow, error: readErr } = await getSupabaseAdmin()
-    .from(ASSIGNMENTS_TABLE)
-    .select('*')
-    .eq('id', input.id)
-    .maybeSingle();
-  if (readErr) throw fromPostgrestError(readErr);
-  if (!existingRow) throw notFound('Assignment');
-  const before = asAssignment(existingRow);
+  return withServiceTx(async (tx) => {
+    try {
+      const before = await fetchAssignedLead(tx, input.id);
+      if (!before) throw notFound('Assignment');
 
-  const { error } = await getSupabaseAdmin()
-    .from(ASSIGNMENTS_TABLE)
-    .delete()
-    .eq('id', input.id);
-  if (error) throw fromPostgrestError(error);
+      await tx.unsafe(
+        `UPDATE marketing_leads
+         SET assigned_user_id = NULL, updated_at = CLOCK_TIMESTAMP()
+         WHERE id = $1::uuid AND NOT is_deleted`,
+        [input.id],
+      );
 
-  await logAssignmentRemoved(input.actorId, before.lead_id, {
-    assignment_id: before.id,
-    branch: before.branch,
-    assigned_to: before.assigned_to,
-    notes: before.notes,
+      await logAssignmentRemoved(input.actorId, before.lead_id, {
+        assignment_id: before.id,
+        branch: before.branch,
+        assigned_to: before.assigned_to,
+        notes: null,
+      });
+    } catch (err) {
+      if (err instanceof DatabaseError) throw err;
+      throw fromPgError(err);
+    }
   });
 }
+
+// Exported for callers that need the bare DB shape.
+export type { Assignment };

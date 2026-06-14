@@ -24,6 +24,10 @@ export interface Lead {
   platform?:        string;
   orgId?:           string;
   orgName?:         string;
+  stageId?:         number | null;
+  outcomeId?:       number | null;
+  outcomeLabel?:    string | null;
+  outcomeComment?:  string | null;
 }
 
 export interface StatsData {
@@ -41,6 +45,7 @@ export interface UpdatePayload {
     scheduledAt: string;
     notes?: string | null;
   };
-  failReasonId?: number;
+  outcomeId?: number;
+  outcomeComment?: string;
   transitionNote?: string;
 }

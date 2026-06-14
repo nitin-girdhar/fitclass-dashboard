@@ -47,20 +47,26 @@ CREATE TABLE IF NOT EXISTS campaign_statuses (
     description TEXT
 );
 
-CREATE TABLE IF NOT EXISTS lead_statuses (
+CREATE TABLE IF NOT EXISTS lead_stage (
     id                SMALLINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name              TEXT     UNIQUE NOT NULL,
+    label             TEXT     NOT NULL DEFAULT '',
     description       TEXT,
-    label             TEXT     NOT NULL DEFAULT '',    -- human-readable display name for dropdowns
-    requires_followup BOOLEAN  NOT NULL DEFAULT FALSE, -- follow-up must be scheduled on transition
-    is_rejection      BOOLEAN  NOT NULL DEFAULT FALSE  -- opens rejection form (fail-reason + note) on transition
+    followup_required BOOLEAN  NOT NULL DEFAULT FALSE, -- triggers follow-up module
+    is_rejected       BOOLEAN  NOT NULL DEFAULT FALSE, -- triggers reject flow
+    is_terminated     BOOLEAN  NOT NULL DEFAULT FALSE, -- converted/transferred_out: stop showing in active pipeline
+    display_order     SMALLINT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS lead_fail_reasons (
-    id          SMALLINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    name        TEXT     UNIQUE NOT NULL,
-    description TEXT,
-    label       TEXT     NOT NULL DEFAULT ''   -- human-readable display name for dropdowns
+CREATE TABLE IF NOT EXISTS lead_stage_outcome (
+    id               SMALLINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    stage_id         SMALLINT NOT NULL REFERENCES lead_stage(id) ON DELETE RESTRICT,
+    name             TEXT     NOT NULL,
+    label            TEXT     NOT NULL DEFAULT '',
+    description      TEXT,
+    requires_comment BOOLEAN  NOT NULL DEFAULT FALSE, -- e.g. "Other" under Unqualified
+    display_order    SMALLINT NOT NULL DEFAULT 0,
+    CONSTRAINT uq_lead_stage_outcome_stage_name UNIQUE (stage_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS interaction_types (
@@ -116,14 +122,17 @@ CREATE TABLE IF NOT EXISTS cities (
 --   org_types:         branch=1 franchise=2 clinic=3 gym_location=4
 --                      warehouse=5 showroom=6 head_office=7
 --   user_roles:        super_admin=1 tenant_admin=2 org_admin=3 org_sr_manager=4
---                      org_manager=5 senior_sales_executive=6 sales_rep=7 read_only=8
+--                      org_manager=5 senior_sales_executive=6 sales_representative=7 read_only=8
 --   marketing_platforms: facebook=1 google=2 linkedin=3 instagram=4
 --                        tiktok=5 organic=6 referral=7 whatsapp_ads=8
 --   campaign_statuses: draft=1 active=2 paused=3 completed=4 archived=5
---   lead_statuses:     new=1 contacted=2 qualified=3 converted=4
---                      failed=5 on_hold=6 nurturing=7
---   lead_fail_reasons: wrong_number=1 not_interested=2 budget_constraint=3
---                      no_response=4 duplicate=5 spam=6 invalid_lead=7
+--   lead_stage:        new=1 contacting=2 qualified=3 converted=4
+--                      unqualified=5 transferred_out=6
+--   lead_stage_outcome (contacting): not_connected=1 switch_off=2 not_answered=3 call_back_later=4
+--   lead_stage_outcome (qualified):  visit_scheduled=5 visited=6
+--   lead_stage_outcome (unqualified): no_response_after_multiple_attempts=7 wrong_number=8
+--                      job_applicant=9 budget_issue=10 not_interested=11
+--                      location_issue=12 duplicate_lead=13 other=14
 --   interaction_types: call=1 whatsapp=2 email=3 sms=4
 --                      in_person=5 video_call=6 chat=7
 --   follow_up_statuses: pending=1 completed=2 missed=3 rescheduled=4
@@ -165,7 +174,7 @@ INSERT INTO user_roles (name, description, rank, label) VALUES
     ('org_sr_manager',         'Manages a team of managers and reps within an org',                               70, 'Senior Manager'),
     ('org_manager',            'Manages a team of Senior Sales Executives and reps within an org',                60, 'Manager'),
     ('senior_sales_executive', 'Senior Sales Executive - manages a team of sales reps; reports to org_manager',   40, 'Senior Sales Executive'),
-    ('sales_rep',              'Front-line sales - manages own assigned leads and follow-ups',                     20, 'Sales Representative'),
+    ('sales_representativeresentative',              'Front-line sales - manages own assigned leads and follow-ups',                     20, 'Sales Representative'),
     ('read_only',              'Read-only viewer - dashboards and reports only',                                    0, 'Read Only')
 ON CONFLICT (name) DO UPDATE SET rank = EXCLUDED.rank, label = EXCLUDED.label, description = EXCLUDED.description;
 
@@ -188,28 +197,61 @@ INSERT INTO campaign_statuses (name, description) VALUES
     ('archived',  'Campaign permanently closed and moved to archive')
 ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO lead_statuses (name, description, label, requires_followup, is_rejection) VALUES
-    ('new',       'Lead just received - not yet contacted',                        'New',       FALSE, FALSE),
-    ('contacted', 'First contact made - call, WhatsApp, or email sent',            'Contacted', TRUE,  FALSE),
-    ('qualified', 'Lead confirmed as a genuine prospect with intent and budget',   'Qualified', FALSE, FALSE),
-    ('converted', 'Lead became a paying customer',                                 'Converted', FALSE, FALSE),
-    ('failed',    'Lead did not convert - fail reason and note must be recorded',  'Failed',    FALSE, TRUE),
-    ('on_hold',   'Lead paused by request or external circumstance',               'On Hold',   TRUE,  FALSE),
-    ('nurturing', 'Long-cycle lead kept warm via periodic touches',                'Nurturing', FALSE, FALSE)
+INSERT INTO lead_stage (name, label, description, followup_required, is_rejected, is_terminated, display_order) VALUES
+    ('new',            'New',            'Lead just received - not yet contacted',                       FALSE, FALSE, FALSE, 1),
+    ('contacting',     'Contacting',     'Active outreach in progress - calls, WhatsApp, or email',      TRUE,  FALSE, FALSE, 2),
+    ('qualified',      'Qualified',      'Lead confirmed as a genuine prospect with intent and budget',  TRUE,  FALSE, FALSE, 3),
+    ('converted',      'Converted',      'Lead became a paying customer',                                FALSE, FALSE, TRUE,  4),
+    ('unqualified',    'Unqualified',    'Lead did not qualify - outcome and note must be recorded',     FALSE, TRUE,  TRUE,  5),
+    ('transferred_out','Transferred Out','Lead transferred to another org or partner',                   FALSE, FALSE, TRUE,  6)
 ON CONFLICT (name) DO UPDATE SET
     label             = EXCLUDED.label,
-    requires_followup = EXCLUDED.requires_followup,
-    is_rejection      = EXCLUDED.is_rejection;
+    description       = EXCLUDED.description,
+    followup_required = EXCLUDED.followup_required,
+    is_rejected       = EXCLUDED.is_rejected,
+    is_terminated     = EXCLUDED.is_terminated,
+    display_order     = EXCLUDED.display_order;
 
-INSERT INTO lead_fail_reasons (name, description, label) VALUES
-    ('wrong_number',       'Phone number provided is incorrect or non-existent',            'Wrong Number'),
-    ('not_interested',     'Lead explicitly declined and asked not to be contacted',         'Not Interested'),
-    ('budget_constraint',  'Lead''s budget does not meet the product or service pricing',   'Budget Constraint'),
-    ('no_response',        'No reply after multiple contact attempts over defined period',   'No Response'),
-    ('duplicate',          'Lead is a duplicate of an existing record in the system',        'Duplicate'),
-    ('spam',               'Submission identified as bot, spam, or malicious form fill',     'Spam'),
-    ('invalid_lead',       'Lead details are fabricated, untraceable, or otherwise invalid', 'Invalid Lead')
-ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+-- Outcomes for contacting stage
+INSERT INTO lead_stage_outcome (stage_id, name, label, display_order)
+SELECT s.id, o.name, o.label, o.display_order
+FROM lead_stage s
+CROSS JOIN (VALUES
+    ('not_connected',    'Not Connected',    1),
+    ('switch_off',       'Switch Off',       2),
+    ('not_answered',     'Not Answered',     3),
+    ('call_back_later',  'Call Back Later',  4)
+) AS o(name, label, display_order)
+WHERE s.name = 'contacting'
+ON CONFLICT (stage_id, name) DO NOTHING;
+
+-- Outcomes for qualified stage
+INSERT INTO lead_stage_outcome (stage_id, name, label, display_order)
+SELECT s.id, o.name, o.label, o.display_order
+FROM lead_stage s
+CROSS JOIN (VALUES
+    ('visit_scheduled', 'Visit Scheduled', 1),
+    ('visited',         'Visited',         2)
+) AS o(name, label, display_order)
+WHERE s.name = 'qualified'
+ON CONFLICT (stage_id, name) DO NOTHING;
+
+-- Outcomes for unqualified stage
+INSERT INTO lead_stage_outcome (stage_id, name, label, requires_comment, display_order)
+SELECT s.id, o.name, o.label, o.requires_comment, o.display_order
+FROM lead_stage s
+CROSS JOIN (VALUES
+    ('no_response_after_multiple_attempts', 'No Response After Multiple Attempts', FALSE, 1),
+    ('wrong_number',                        'Wrong Number',                        FALSE, 2),
+    ('job_applicant',                       'Job Applicant',                       FALSE, 3),
+    ('budget_issue',                        'Budget Issue',                        FALSE, 4),
+    ('not_interested',                      'Not Interested',                      FALSE, 5),
+    ('location_issue',                      'Location Issue',                      FALSE, 6),
+    ('duplicate_lead',                      'Duplicate Lead',                      FALSE, 7),
+    ('other',                               'Other',                               TRUE,  8)
+) AS o(name, label, requires_comment, display_order)
+WHERE s.name = 'unqualified'
+ON CONFLICT (stage_id, name) DO NOTHING;
 
 INSERT INTO interaction_types (name, description) VALUES
     ('call',       'Outbound or inbound phone call'),

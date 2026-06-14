@@ -1,7 +1,7 @@
 select *
 from public.schema_versions;
 
-create database crm;
+--create database crm;
 
 --drop database crm(force)
 
@@ -18,7 +18,8 @@ from public.lead_statuses
 where name = 'nurturing'
 
 select *
-from public.user_roles;
+from public.user_roles
+
 
 select *
 from public.users

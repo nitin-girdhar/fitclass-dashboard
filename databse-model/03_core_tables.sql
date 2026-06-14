@@ -237,8 +237,9 @@ CREATE TRIGGER trg_01_ad_campaigns_set_created_by
 -- MARKETING_LEADS
 -- Core CRM entity. full_name is computed — never insert it directly.
 -- last_name is nullable to support single-name contacts.
--- status_id must be passed explicitly (SELECT id FROM lead_statuses WHERE name='new').
--- fail_reason_id must be set when status='failed' and NULL otherwise (enforced by trigger).
+-- stage_id must be passed explicitly (SELECT id FROM lead_stage WHERE name='new').
+-- outcome_id must belong to the current stage (enforced by trigger check_lead_stage_outcome).
+-- outcome_comment is required when the resolved outcome has requires_comment = TRUE.
 -- campaign_id uses ON DELETE SET NULL — deleting a campaign never destroys leads.
 -- assigned_user_id uses ON DELETE SET NULL — lead returns to unassigned pool if rep is deleted.
 -- embedding column stub: uncomment after pgvector is confirmed; see 05_indexes.sql.
@@ -264,8 +265,9 @@ CREATE TABLE IF NOT EXISTS marketing_leads (
     state_id         SMALLINT REFERENCES states(id)    ON DELETE RESTRICT,
     country_id       SMALLINT REFERENCES countries(id) ON DELETE RESTRICT,
     campaign_id      UUID     REFERENCES ad_campaigns(id) ON DELETE SET NULL,
-    status_id        SMALLINT NOT NULL REFERENCES lead_statuses(id)     ON DELETE RESTRICT,
-    fail_reason_id   SMALLINT REFERENCES lead_fail_reasons(id) ON DELETE RESTRICT,
+    stage_id         SMALLINT NOT NULL REFERENCES lead_stage(id)         ON DELETE RESTRICT,
+    outcome_id       SMALLINT REFERENCES lead_stage_outcome(id)          ON DELETE RESTRICT,
+    outcome_comment  TEXT,
     assigned_user_id  UUID     REFERENCES users(id) ON DELETE SET NULL,
     -- Walk-in dedup: points to the first digital (campaign-linked) lead with the
     -- same phone/email in the org. NULL for all non-walk-in leads and walk-ins
@@ -367,33 +369,72 @@ CREATE TRIGGER trg_01_lead_follow_ups_set_created_by
 -- BUSINESS RULE TRIGGERS
 -- ============================================================
 
--- Enforces fail_reason_id ↔ status='failed' invariant:
---   status='failed'  → fail_reason_id MUST be set
---   any other status → fail_reason_id MUST be NULL
-CREATE OR REPLACE FUNCTION check_lead_fail_reason()
+-- Enforces outcome_id ↔ stage_id consistency:
+--   outcome_id must belong to the current stage_id.
+--   On stage change: auto-null outcome_id/outcome_comment when stage has no outcomes
+--                    or the supplied outcome doesn't match the new stage.
+--   outcome_comment is required when outcome.requires_comment = TRUE.
+--   outcome_id IS NULL → outcome_comment forced to NULL.
+CREATE OR REPLACE FUNCTION check_lead_stage_outcome()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
-    v_status TEXT;
+    v_outcome_stage_id  SMALLINT;
+    v_outcome_count     INT;
+    v_requires_comment  BOOLEAN;
 BEGIN
-    SELECT name INTO v_status FROM lead_statuses WHERE id = NEW.status_id;
-    IF v_status = 'failed' AND NEW.fail_reason_id IS NULL THEN
-        RAISE EXCEPTION
-            'fail_reason_id is required when lead status is ''failed''. '
-            'Set fail_reason_id before or simultaneously with status change.';
+    IF TG_OP = 'UPDATE' AND NEW.stage_id IS DISTINCT FROM OLD.stage_id THEN
+        -- Stage changed: auto-null outcome when new stage has no outcomes
+        SELECT COUNT(*) INTO v_outcome_count
+        FROM lead_stage_outcome WHERE stage_id = NEW.stage_id;
+
+        IF v_outcome_count = 0 THEN
+            NEW.outcome_id      := NULL;
+            NEW.outcome_comment := NULL;
+        ELSIF NEW.outcome_id IS NOT NULL THEN
+            -- Outcome supplied but doesn't belong to new stage: auto-null
+            IF NOT EXISTS (
+                SELECT 1 FROM lead_stage_outcome
+                WHERE id = NEW.outcome_id AND stage_id = NEW.stage_id
+            ) THEN
+                NEW.outcome_id      := NULL;
+                NEW.outcome_comment := NULL;
+            END IF;
+        END IF;
+    ELSIF NEW.outcome_id IS NOT NULL THEN
+        -- INSERT or UPDATE without stage change: validate outcome belongs to stage
+        SELECT stage_id INTO v_outcome_stage_id
+        FROM lead_stage_outcome WHERE id = NEW.outcome_id;
+
+        IF v_outcome_stage_id IS DISTINCT FROM NEW.stage_id THEN
+            RAISE EXCEPTION
+                'outcome_id % does not belong to stage_id %. '
+                'Cross-stage outcome selection is not allowed.',
+                NEW.outcome_id, NEW.stage_id;
+        END IF;
     END IF;
-    IF v_status <> 'failed' AND NEW.fail_reason_id IS NOT NULL THEN
-        RAISE EXCEPTION
-            'fail_reason_id must be NULL when lead status is ''%'' (only valid for ''failed'' status).',
-            v_status;
+
+    -- Validate requires_comment and force-null comment when outcome is null
+    IF NEW.outcome_id IS NOT NULL THEN
+        SELECT requires_comment INTO v_requires_comment
+        FROM lead_stage_outcome WHERE id = NEW.outcome_id;
+
+        IF v_requires_comment AND (NEW.outcome_comment IS NULL OR NEW.outcome_comment = '') THEN
+            RAISE EXCEPTION
+                'outcome_comment is required for this outcome (requires_comment = TRUE). '
+                'Please provide a comment describing the reason.';
+        END IF;
+    ELSE
+        NEW.outcome_comment := NULL;
     END IF;
+
     RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_lead_fail_reason_check ON marketing_leads;
-CREATE TRIGGER trg_lead_fail_reason_check
-    BEFORE INSERT OR UPDATE OF status_id, fail_reason_id ON marketing_leads
-    FOR EACH ROW EXECUTE FUNCTION check_lead_fail_reason();
+DROP TRIGGER IF EXISTS trg_lead_stage_outcome_check ON marketing_leads;
+CREATE TRIGGER trg_lead_stage_outcome_check
+    BEFORE INSERT OR UPDATE OF stage_id, outcome_id, outcome_comment ON marketing_leads
+    FOR EACH ROW EXECUTE FUNCTION check_lead_stage_outcome();
 
 -- Enforces completed_at ↔ status='completed' invariant on follow-ups:
 --   status='completed' → completed_at MUST be set
@@ -507,18 +548,18 @@ CREATE TRIGGER trg_lead_follow_ups_fk_scope
 
 -- ============================================================
 -- LEAD_STATUS_LOG
--- Immutable record of every lead status transition. Written by trigger only.
--- old_status_id is NULL on INSERT (first status assignment).
--- ON DELETE CASCADE on lead_id: purging a lead removes its status log.
+-- Immutable record of every lead stage transition. Written by trigger only.
+-- old_stage_id is NULL on INSERT (first stage assignment).
+-- ON DELETE CASCADE on lead_id: purging a lead removes its stage log.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS lead_status_log (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id              UUID        NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     lead_id             UUID        NOT NULL REFERENCES marketing_leads(id) ON DELETE CASCADE,
-    old_status_id       SMALLINT    REFERENCES lead_statuses(id) ON DELETE RESTRICT,
-    new_status_id       SMALLINT    NOT NULL REFERENCES lead_statuses(id) ON DELETE RESTRICT,
-    old_fail_reason_id  SMALLINT    REFERENCES lead_fail_reasons(id) ON DELETE RESTRICT,
-    new_fail_reason_id  SMALLINT    REFERENCES lead_fail_reasons(id) ON DELETE RESTRICT,
+    old_stage_id        SMALLINT    REFERENCES lead_stage(id) ON DELETE RESTRICT,
+    new_stage_id        SMALLINT    NOT NULL REFERENCES lead_stage(id) ON DELETE RESTRICT,
+    old_outcome_id      SMALLINT    REFERENCES lead_stage_outcome(id) ON DELETE RESTRICT,
+    new_outcome_id      SMALLINT    REFERENCES lead_stage_outcome(id) ON DELETE RESTRICT,
     assigned_user_id    UUID        REFERENCES users(id) ON DELETE SET NULL,
     changed_by_id       UUID        REFERENCES users(id) ON DELETE SET NULL,
     transition_note     TEXT,

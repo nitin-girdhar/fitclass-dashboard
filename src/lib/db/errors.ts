@@ -1,12 +1,11 @@
 /**
  * Standardised database error handling.
  *
- * SERVER-ONLY. Wraps the loosely-typed Supabase/PostgREST error shape into a
- * single typed `DatabaseError` with a stable `kind` discriminant, so callers
- * branch on intent ("unique violation", "not found") instead of pg codes
- * scattered across the codebase. Never leaks raw SQL/driver detail to clients.
+ * SERVER-ONLY. Wraps postgres.js errors into a single typed DatabaseError
+ * with a stable `kind` discriminant, so callers branch on intent
+ * ("unique violation", "not found") instead of SQLSTATE codes scattered
+ * across the codebase. Never leaks raw SQL/driver detail to clients.
  */
-import type { PostgrestError } from '@supabase/supabase-js';
 
 export type DatabaseErrorKind =
   | 'unique_violation' // 23505
@@ -39,19 +38,29 @@ function kindFromPgCode(code: string | undefined): DatabaseErrorKind {
 }
 
 /**
- * Normalise a PostgrestError into a DatabaseError. Use at every Supabase call
- * site: `if (error) throw fromPostgrestError(error);`
+ * Normalise a postgres.js error (or any object carrying a SQLSTATE `code`)
+ * into a DatabaseError. Unique/FK violations produce typed kinds; everything
+ * else becomes 'unknown'. Non-object throws are re-wrapped so callers always
+ * receive a DatabaseError at a catch site after a DB call.
  */
-export function fromPostgrestError(error: PostgrestError): DatabaseError {
-  const kind = kindFromPgCode(error.code);
-  // Keep the human message generic; details stay in server logs via `code`.
-  const message =
-    kind === 'unique_violation'
-      ? 'A record with these unique values already exists'
-      : kind === 'foreign_key_violation'
-        ? 'Referenced record does not exist'
-        : error.message || 'Database operation failed';
-  return new DatabaseError(kind, message, error.code ?? null);
+export function fromPgError(err: unknown): DatabaseError {
+  if (err != null && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === 'string') {
+      const kind = kindFromPgCode(code);
+      const message =
+        kind === 'unique_violation'
+          ? 'A record with these unique values already exists'
+          : kind === 'foreign_key_violation'
+            ? 'Referenced record does not exist'
+            : 'message' in err
+              ? String((err as { message: unknown }).message)
+              : 'Database operation failed';
+      return new DatabaseError(kind, message, code);
+    }
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return new DatabaseError('unknown', message);
 }
 
 /** Explicit not-found helper for query-by-id/email paths. */

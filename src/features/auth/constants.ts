@@ -9,30 +9,29 @@
  * Canonical role list matching PostgreSQL user_roles.name values.
  * ORDER MATTERS: index ascends with privilege level.
  *
- * PostgreSQL roles (new, used when AUTH_PROVIDER=local):
  *  - read_only              → view dashboard only
- *  - sales_rep              → individual contributor (was: sales_executive)
+ *  - sales_representative   → individual contributor (alias: sales_executive)
  *  - senior_sales_executive → higher-rank IC; may absorb leads from juniors
- *  - org_manager            → owns a branch; routes work to sales tier (was: manager)
- *  - org_admin              → full access within one org (was: admin)
+ *  - org_manager            → owns a branch; routes work to sales tier (alias: manager)
+ *  - org_admin              → full access within one org (alias: admin)
  *  - tenant_admin           → cross-org tenant dashboard
  *  - super_admin            → platform-wide administration
  *
- * Legacy Supabase roles kept for backward compatibility (AUTH_PROVIDER=supabase):
- *  sales_executive, manager, admin
+ * Legacy aliases (sales_executive, manager, admin) are retained in ROLES for
+ * JWT decode compatibility with tokens issued before the role rename migration.
  */
 export const ROLES = [
-  'read_only',
-  'sales_rep',
-  'sales_executive',
-  'senior_sales_executive',
-  'org_manager',
-  'manager',
-  'org_sr_manager',
-  'org_admin',
-  'admin',
-  'tenant_admin',
-  'super_admin',
+  "read_only",
+  "sales_representative",
+  "sales_executive",
+  "senior_sales_executive",
+  "org_manager",
+  "manager",
+  "org_sr_manager",
+  "org_admin",
+  "admin",
+  "tenant_admin",
+  "super_admin",
 ] as const;
 
 /**
@@ -41,14 +40,14 @@ export const ROLES = [
  * ROLES retains all names for type coverage and JWT decode compatibility.
  */
 export const CANONICAL_ROLES = [
-  'read_only',
-  'sales_rep',
-  'senior_sales_executive',
-  'org_manager',
-  'org_sr_manager',
-  'org_admin',
-  'tenant_admin',
-  'super_admin',
+  "read_only",
+  "sales_representative",
+  "senior_sales_executive",
+  "org_manager",
+  "org_sr_manager",
+  "org_admin",
+  "tenant_admin",
+  "super_admin",
 ] as const satisfies ReadonlyArray<(typeof ROLES)[number]>;
 
 /**
@@ -56,8 +55,7 @@ export const CANONICAL_ROLES = [
  *
  * Used ONLY to translate a role NAME string into a rank number where the
  * full SessionUser (with user.rank from the JWT) is not available — e.g.
- * filtering role dropdown options in RoleSelector, or computing the Supabase
- * fallback rank at login.
+ * filtering role dropdown options in RoleSelector.
  *
  * Server-side permission checks must use `actor.rank` (from the JWT, sourced
  * from user_roles.rank in PostgreSQL) — NOT this constant. Rank changes in the
@@ -67,7 +65,7 @@ export const CANONICAL_ROLES = [
  */
 export const ROLE_RANK: Record<(typeof ROLES)[number], number> = {
   read_only: 0,
-  sales_rep: 20,
+  sales_representative: 20,
   sales_executive: 20,
   senior_sales_executive: 40,
   org_manager: 60,
@@ -87,56 +85,69 @@ export const ROLE_RANK: Record<(typeof ROLES)[number], number> = {
  * role names; this constant is for Edge / client code that cannot query the DB.
  */
 export const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
-  read_only: 'Read Only',
-  sales_rep: 'Sales Representative',
-  sales_executive: 'Sales Representative',
-  senior_sales_executive: 'Senior Sales Executive',
-  org_manager: 'Manager',
-  manager: 'Manager',
-  org_sr_manager: 'Senior Manager',
-  org_admin: 'Org Admin',
-  admin: 'Admin',
-  tenant_admin: 'Tenant Admin',
-  super_admin: 'Super Admin',
+  read_only: "Read Only",
+  sales_representative: "Sales Representative",
+  sales_executive: "Sales Representative",
+  senior_sales_executive: "Senior Sales Executive",
+  org_manager: "Manager",
+  manager: "Manager",
+  org_sr_manager: "Senior Manager",
+  org_admin: "Org Admin",
+  admin: "Admin",
+  tenant_admin: "Tenant Admin",
+  super_admin: "Super Admin",
 };
+
+/**
+ * Role tier groupings — single source of truth used by navigation.ts,
+ * permission checks, and any future UI that needs tier-based filtering.
+ * navigation.ts imports from here instead of defining its own local arrays.
+ */
+export const ROLE_TIERS = {
+  ADMIN: ["super_admin", "tenant_admin", "org_admin", "admin"] as const,
+  MANAGER: ["org_manager", "org_sr_manager", "manager"] as const,
+  SSE: ["senior_sales_executive"] as const,
+  SE: ["sales_representative", "sales_executive"] as const,
+  READ_ONLY: ["read_only"] as const,
+} as const satisfies Record<string, ReadonlyArray<(typeof ROLES)[number]>>;
 
 /**
  * True for any role in the individual-contributor "sales" tier.
  */
 export function isSalesRole(role: (typeof ROLES)[number]): boolean {
   return (
-    role === 'sales_rep' ||
-    role === 'sales_executive' ||
-    role === 'senior_sales_executive'
+    role === "sales_representative" ||
+    role === "sales_executive" ||
+    role === "senior_sales_executive"
   );
 }
 
 // ── JWT / session ───────────────────────────────────────────────────────────
 /** Token lifetime, as a `jsonwebtoken` expiresIn string. */
-export const JWT_EXPIRES_IN = '7d';
+export const JWT_EXPIRES_IN = "7d";
 /** Same lifetime in seconds — used for cookie Max-Age and manual checks. */
 export const JWT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 /** Token issuer/audience claims — pin these to detect cross-system token reuse. */
-export const JWT_ISSUER = 'fitclass-crm';
-export const JWT_AUDIENCE = 'fitclass-crm:web';
+export const JWT_ISSUER = "fitclass-crm";
+export const JWT_AUDIENCE = "fitclass-crm:web";
 
 /** Name of the HTTP-only cookie that carries the session token. */
-export const AUTH_COOKIE_NAME = 'fc_session';
+export const AUTH_COOKIE_NAME = "fc_session";
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 export const AUTH_ROUTES = {
   /** Public sign-in page. */
-  login: '/login',
+  login: "/login",
   /** Authenticated landing area (all sub-paths protected). */
-  dashboard: '/dashboard',
+  dashboard: "/dashboard",
   /** Where to send users after logout. */
-  afterLogout: '/login',
+  afterLogout: "/login",
   /** Where to send users after successful login. */
-  afterLogin: '/dashboard/leads',
+  afterLogin: "/dashboard/leads",
 } as const;
 
 /** Path prefixes that require a valid session (pages + APIs). */
-export const PROTECTED_PREFIXES = ['/dashboard', '/api'] as const;
+export const PROTECTED_PREFIXES = ["/dashboard", "/api"] as const;
 
 /**
  * EXACT paths that require a valid session — used for routes that cannot be
@@ -150,11 +161,11 @@ export const PROTECTED_PREFIXES = ['/dashboard', '/api'] as const;
  * Edge gate still bounces the request to /login. There is no production
  * scenario in which the root URL serves CRM content publicly.
  */
-export const PROTECTED_EXACT_PATHS = ['/'] as const;
+export const PROTECTED_EXACT_PATHS = ["/"] as const;
 
 /**
  * Paths that must stay publicly reachable even when unauthenticated.
  * `/api/auth/*` covers the login / logout / me endpoints so the middleware
  * never deadlocks the sign-in flow.
  */
-export const PUBLIC_PATHS = ['/login', '/api/auth'] as const;
+export const PUBLIC_PATHS = ["/login", "/api/auth"] as const;

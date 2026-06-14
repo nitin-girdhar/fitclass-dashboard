@@ -106,7 +106,7 @@ export function FollowUpPipeline({ assignedRepId, overdueOnly }: Props) {
                   <p className="text-xs text-gray-400">{item.leadPhone}</p>
                 )}
                 <span className="mt-0.5 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {item.leadStatus.replace(/_/g, ' ')}
+                  {item.leadStage.replace(/_/g, ' ')}
                 </span>
               </td>
               <td className="px-4 py-3">

@@ -133,7 +133,7 @@ export default function LeadDashboardShell({ actor }: Props) {
   const {
     leads, stats, loading, error,
     headers, statusOptions, statusLabelMap, requiresFollowupStatuses,
-    rejectionStatuses, failReasons,
+    rejectionStatuses, failReasons: stageOutcomes, stageNameToId,
     assignments, refetch,
     updateLead,
   } = useLeads(orgIds, platforms);
@@ -306,7 +306,8 @@ export default function LeadDashboardShell({ actor }: Props) {
             onAssignmentChanged={refetch}
             requiresFollowupStatuses={requiresFollowupStatuses}
             rejectionStatuses={rejectionStatuses}
-            failReasons={failReasons}
+            stageOutcomes={stageOutcomes}
+            stageNameToId={stageNameToId}
           />
         </div>
       </div>

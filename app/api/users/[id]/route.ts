@@ -1,17 +1,14 @@
 /**
  * GET /api/users/[id] - Get single user
  * PATCH /api/users/[id] - Update user
- * DELETE /api/users/[id] - Soft-delete user (PostgreSQL native)
+ * DELETE /api/users/[id] - Soft-delete user
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { requireSession } from "@/src/lib/auth/session";
+import { withRoute } from "@/src/lib/api/route-handler";
 import * as usersQueries from "@/src/lib/db/queries/users";
-import { AppError } from "@/src/lib/errors";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
-
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? "supabase";
 
 const updateUserSchema = z.object({
   firstName: z.string().max(50).optional(),
@@ -27,138 +24,39 @@ const updateUserSchema = z.object({
   forcePasswordChange: z.boolean().optional(),
 });
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    if (AUTH_PROVIDER !== "local") {
-      return NextResponse.json(
-        { error: "PostgreSQL auth not enabled" },
-        { status: 400 },
-      );
-    }
+export const GET = withRoute<{ id: string }>(async (_req, session, { id }) => {
+  const user = await usersQueries.getUserById(session.orgId, session.id, id);
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  return NextResponse.json(user, { status: 200 });
+});
 
-    const gate = await requireSession();
-    if (!gate.ok) return gate.response;
-
-    const { id } = await params;
-    const userOrgId = gate.session.orgId;
-    const user = await usersQueries.getUserById(userOrgId, gate.session.id, id);
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(user, { status: 200 });
-  } catch (err) {
-    console.error("[GET /api/users/[id]]", err);
-    if (err instanceof AppError) {
-      return NextResponse.json(
-        { error: err.message },
-        { status: err.statusCode },
-      );
-    }
+export const PATCH = withRoute<{ id: string }>(async (req: NextRequest, session, { id }) => {
+  const body = await req.json();
+  const parsed = updateUserSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      { error: "Invalid request body", details: parsed.error.issues },
+      { status: 400 },
     );
   }
-}
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
   try {
-    if (AUTH_PROVIDER !== "local") {
-      return NextResponse.json(
-        { error: "PostgreSQL auth not enabled" },
-        { status: 400 },
-      );
-    }
-
-    const gate = await requireSession();
-    if (!gate.ok) return gate.response;
-
-    const body = await req.json();
-    const parsed = updateUserSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request body", details: parsed.error.issues },
-        { status: 400 },
-      );
-    }
-
-    const { id } = await params;
-    const userOrgId = gate.session.orgId;
-    const result = await usersQueries.updateUser(
-      userOrgId,
-      gate.session.id,
-      id,
-      parsed.data,
-    );
-
-    if (!result) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
+    const result = await usersQueries.updateUser(session.orgId, session.id, id, parsed.data);
+    if (!result) return NextResponse.json({ error: "User not found" }, { status: 404 });
     return NextResponse.json({ id: result.id }, { status: 200 });
   } catch (err) {
-    console.error("[PATCH /api/users/[id]]", err);
-    if (err instanceof AppError) {
-      return NextResponse.json(
-        { error: err.message },
-        { status: err.statusCode },
-      );
-    }
-
-    const errorMessage = (err as any)?.message || "";
-    if (errorMessage.includes("unique") || errorMessage.includes("uq_users")) {
+    const msg = (err as any)?.message ?? "";
+    if (msg.includes("unique") || msg.includes("uq_users")) {
       return NextResponse.json(
         { error: "A user with this email already exists." },
         { status: 409 },
       );
     }
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    throw err;
   }
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    if (AUTH_PROVIDER !== "local") {
-      return NextResponse.json(
-        { error: "PostgreSQL auth not enabled" },
-        { status: 400 },
-      );
-    }
-
-    const gate = await requireSession();
-    if (!gate.ok) return gate.response;
-
-    const { id } = await params;
-    const userOrgId = gate.session.orgId;
-    await usersQueries.deleteUser(userOrgId, gate.session.id, id);
-
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (err) {
-    console.error("[DELETE /api/users/[id]]", err);
-    if (err instanceof AppError) {
-      return NextResponse.json(
-        { error: err.message },
-        { status: err.statusCode },
-      );
-    }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
-}
+export const DELETE = withRoute<{ id: string }>(async (_req, session, { id }) => {
+  await usersQueries.deleteUser(session.orgId, session.id, id);
+  return NextResponse.json({ success: true }, { status: 200 });
+});

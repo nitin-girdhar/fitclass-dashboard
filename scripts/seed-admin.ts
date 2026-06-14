@@ -11,7 +11,11 @@
  *  - Hashes the password with the shared bcrypt helper — plaintext is never
  *    stored and never logged (logging prints email + role only).
  *
- * SERVER/CLI ONLY. Uses supabaseAdmin (service role).
+ * Prerequisites:
+ *  - SEED_ORG_ID must be the UUID of an existing organisation row. Create the
+ *    org (and its parent tenant) first, then run this script.
+ *
+ * SERVER/CLI ONLY. Uses the service-role PostgreSQL connection.
  */
 import { z } from 'zod';
 import { hashPassword } from '@/src/lib/auth/password';
@@ -25,13 +29,17 @@ const seedSchema = z.object({
     .string()
     .min(10, 'SEED_ADMIN_PASSWORD must be at least 10 characters'),
   SEED_ADMIN_NAME: z.string().min(1).default('FitClass Admin'),
+  SEED_ORG_ID: z
+    .string()
+    .uuid('SEED_ORG_ID must be a valid UUID of an existing organisation'),
 });
 
 async function main(): Promise<void> {
   const parsed = seedSchema.safeParse({
-    SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL,
+    SEED_ADMIN_EMAIL:    process.env.SEED_ADMIN_EMAIL,
     SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD,
-    SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME,
+    SEED_ADMIN_NAME:     process.env.SEED_ADMIN_NAME,
+    SEED_ORG_ID:         process.env.SEED_ORG_ID,
   });
 
   if (!parsed.success) {
@@ -40,13 +48,13 @@ async function main(): Promise<void> {
       .join('\n');
     console.error(
       `[seed-admin] Missing/invalid seed env vars:\n${issues}\n` +
-        `Set SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD (and optional ` +
+        `Set SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_ORG_ID (and optional ` +
         `SEED_ADMIN_NAME) in .env.local.`,
     );
     process.exit(1);
   }
 
-  const { SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_ADMIN_NAME } = parsed.data;
+  const { SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_ADMIN_NAME, SEED_ORG_ID } = parsed.data;
   const email = SEED_ADMIN_EMAIL.trim().toLowerCase();
 
   const existing = await getUserByEmail(email);
@@ -65,6 +73,7 @@ async function main(): Promise<void> {
     password_hash,
     role: 'admin',
     is_active: true,
+    org_id: SEED_ORG_ID,
   });
 
   console.log(

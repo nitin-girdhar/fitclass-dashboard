@@ -19,19 +19,14 @@ import UsersClient from '@/components/users/UsersClient';
 
 export const dynamic = 'force-dynamic';
 
-const AUTH_PROVIDER = process.env.AUTH_PROVIDER ?? 'supabase';
-
 export default async function UsersPage() {
   // Phase 2M: SSE creates SEs, so they also need user-management access.
   // sales_executive is the only role completely excluded.
   const actor = await requireMinimumRole('senior_sales_executive');
 
-  // ── Org-scope resolution ───────────────────────────────────────────────
-  // Local path enforces hierarchy:
-  //   super_admin  → all users across all tenants
-  //   tenant_admin → all users in their tenant's orgs
-  //   org_admin+   → users in their own org only
-  const orgIds = AUTH_PROVIDER === 'local' ? await resolveActorOrgIds(actor) : null;
+  // Org-scope: super_admin → null (all tenants), tenant_admin → their tenant's
+  // orgs, everyone else → their own single org.
+  const orgIds = await resolveActorOrgIds(actor);
   const rows = await listUsers(orgIds);
 
   // canViewUser provides the secondary filter (role-based visibility within
