@@ -3,16 +3,16 @@
  *
  * Role → visible nav items:
  *
- *  super_admin / tenant_admin / org_admin / admin
+ *  super_admin / tenant_admin / org_admin
  *    → Leads · Assignments · Users · Analytics
  *
- *  org_manager / manager
+ *  org_sr_manager / org_manager
  *    → Leads · Assignments · Users
  *
  *  senior_sales_executive
  *    → Leads · Assignments · Users · My Leads
  *
- *  sales_representative / sales_executive
+ *  sales_representative
  *    → Leads · My Leads
  *
  *  read_only

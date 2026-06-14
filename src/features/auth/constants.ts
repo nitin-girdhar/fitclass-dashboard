@@ -10,45 +10,24 @@
  * ORDER MATTERS: index ascends with privilege level.
  *
  *  - read_only              → view dashboard only
- *  - sales_representative   → individual contributor (alias: sales_executive)
+ *  - sales_representative   → individual contributor
  *  - senior_sales_executive → higher-rank IC; may absorb leads from juniors
- *  - org_manager            → owns a branch; routes work to sales tier (alias: manager)
- *  - org_admin              → full access within one org (alias: admin)
+ *  - org_manager            → owns a branch; routes work to sales tier
+ *  - org_sr_manager         → senior manager tier
+ *  - org_admin              → full access within one org
  *  - tenant_admin           → cross-org tenant dashboard
  *  - super_admin            → platform-wide administration
- *
- * Legacy aliases (sales_executive, manager, admin) are retained in ROLES for
- * JWT decode compatibility with tokens issued before the role rename migration.
  */
 export const ROLES = [
   "read_only",
   "sales_representative",
-  "sales_executive",
   "senior_sales_executive",
   "org_manager",
-  "manager",
   "org_sr_manager",
   "org_admin",
-  "admin",
   "tenant_admin",
   "super_admin",
 ] as const;
-
-/**
- * Canonical (PostgreSQL-native) roles only — no legacy Supabase aliases.
- * Use this for UI dropdowns so duplicate labels don't appear.
- * ROLES retains all names for type coverage and JWT decode compatibility.
- */
-export const CANONICAL_ROLES = [
-  "read_only",
-  "sales_representative",
-  "senior_sales_executive",
-  "org_manager",
-  "org_sr_manager",
-  "org_admin",
-  "tenant_admin",
-  "super_admin",
-] as const satisfies ReadonlyArray<(typeof ROLES)[number]>;
 
 /**
  * Client-side role → rank lookup.
@@ -66,13 +45,10 @@ export const CANONICAL_ROLES = [
 export const ROLE_RANK: Record<(typeof ROLES)[number], number> = {
   read_only: 0,
   sales_representative: 20,
-  sales_executive: 20,
   senior_sales_executive: 40,
   org_manager: 60,
-  manager: 60,
   org_sr_manager: 70,
   org_admin: 80,
-  admin: 80,
   tenant_admin: 90,
   super_admin: 100,
 };
@@ -87,13 +63,10 @@ export const ROLE_RANK: Record<(typeof ROLES)[number], number> = {
 export const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
   read_only: "Read Only",
   sales_representative: "Sales Representative",
-  sales_executive: "Sales Representative",
   senior_sales_executive: "Senior Sales Executive",
   org_manager: "Manager",
-  manager: "Manager",
   org_sr_manager: "Senior Manager",
   org_admin: "Org Admin",
-  admin: "Admin",
   tenant_admin: "Tenant Admin",
   super_admin: "Super Admin",
 };
@@ -104,10 +77,10 @@ export const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
  * navigation.ts imports from here instead of defining its own local arrays.
  */
 export const ROLE_TIERS = {
-  ADMIN: ["super_admin", "tenant_admin", "org_admin", "admin"] as const,
-  MANAGER: ["org_manager", "org_sr_manager", "manager"] as const,
+  ADMIN: ["super_admin", "tenant_admin", "org_admin"] as const,
+  MANAGER: ["org_manager", "org_sr_manager"] as const,
   SSE: ["senior_sales_executive"] as const,
-  SE: ["sales_representative", "sales_executive"] as const,
+  SE: ["sales_representative"] as const,
   READ_ONLY: ["read_only"] as const,
 } as const satisfies Record<string, ReadonlyArray<(typeof ROLES)[number]>>;
 
@@ -117,7 +90,6 @@ export const ROLE_TIERS = {
 export function isSalesRole(role: (typeof ROLES)[number]): boolean {
   return (
     role === "sales_representative" ||
-    role === "sales_executive" ||
     role === "senior_sales_executive"
   );
 }

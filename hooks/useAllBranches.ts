@@ -4,13 +4,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * Fetches the canonical branch list from GET /api/branches/all.
- *
- * Intended to be called in a parent component and passed down to
- * BranchMultiSelect — one fetch per page, not one per picker instance.
- *
- * Usage:
- *   const { branches, loading, error } = useAllBranches();
- *   <BranchMultiSelect branches={branches} loading={loading} error={error} ... />
+ * Call in a parent component and pass the result down to avoid duplicate fetches.
  */
 export function useAllBranches() {
   const [branches, setBranches] = useState<string[]>([]);

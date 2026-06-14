@@ -3,11 +3,11 @@
 /**
  * Inline lead-assignment picker for the leads-dashboard table.
  *
- * ── Authorization summary (Phase 2W) ──────────────────────────────────────
- *  admin                  → can assign any non-admin user
- *  manager                → can assign SSE + SE inside their branches
- *  senior_sales_executive → can assign SE inside their branches
- *  sales_executive        → read-only badge / "Unassigned" (no UI)
+ * ── Authorization summary ──────────────────────────────────────────────────
+ *  org_admin+             → can assign any non-admin user
+ *  org_manager            → can assign SSE + SE in org
+ *  senior_sales_executive → can assign SE in org
+ *  sales_representative   → self-assign only from unassigned pool
  *
  * ── Phase 2N performance ───────────────────────────────────────────────────
  *  Candidates are a PROP, not a fetch. `LeadDashboardShell` owns the cache
@@ -16,10 +16,10 @@
  *  causing duplicate requests as the user opened popovers across rows.
  *
  * ── Why backend enforcement remains mandatory ──────────────────────────────
- *  The shell-side fetch is filtered server-side via `canAssignToUser` +
- *  `canAssignLeadToBranch`. The picker THEN posts to /api/assignments,
- *  which re-runs the SAME predicates — DevTools / curl cannot widen
- *  authority, only what the server already approved.
+ *  The shell-side fetch is filtered server-side via `canAssignToUser`.
+ *  The picker THEN posts to /api/assignments, which re-runs the SAME
+ *  predicate — DevTools / curl cannot widen authority beyond what the
+ *  server already approved.
  *
  * The popover renders into a portal at document.body so the AG Grid cell's
  * `overflow:hidden` doesn't clip it. Position is computed from the trigger
@@ -60,9 +60,8 @@ const CAN_ASSIGN_ROLES: ReadonlyArray<SessionUser["role"]> = [
   "super_admin",
   "tenant_admin",
   "org_admin",
-  "admin",
+  "org_sr_manager",
   "org_manager",
-  "manager",
   "senior_sales_executive",
 ];
 

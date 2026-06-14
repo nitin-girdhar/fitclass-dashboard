@@ -27,7 +27,7 @@ export interface BranchInfo {
   countryId: number | null;
 }
 
-const TENANT_WIDE_ROLES = new Set(["tenant_admin", "super_admin", "admin"]);
+const TENANT_WIDE_ROLES = new Set(["tenant_admin", "super_admin"]);
 
 export const GET = withRoute(async (req, session) => {
   const { searchParams } = req.nextUrl;

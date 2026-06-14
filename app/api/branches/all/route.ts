@@ -9,7 +9,6 @@
 import { NextResponse } from "next/server";
 import { withRoute } from "@/src/lib/api/route-handler";
 import { listAllBranches } from "@/src/features/branches/queries";
-import { filterAllowedBranches } from "@/src/lib/permissions/branches";
 import { resolveActorOrgIds } from "@/src/lib/permissions/scope";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +16,5 @@ export const dynamic = "force-dynamic";
 export const GET = withRoute(async (_req, session) => {
   const orgIds = await resolveActorOrgIds(session);
   const all = await listAllBranches(orgIds);
-  const visible = filterAllowedBranches(session, all);
-  return NextResponse.json({ branches: visible }, { status: 200 });
+  return NextResponse.json({ branches: all }, { status: 200 });
 });

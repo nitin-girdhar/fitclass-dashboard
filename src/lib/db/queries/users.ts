@@ -127,7 +127,6 @@ export async function updateUser(
       updates.role_id = await resolveLookupId("user_roles", data.roleName);
     if (data.isActive !== undefined) updates.is_active = data.isActive;
     if (data.managerId !== undefined) updates.manager_id = data.managerId;
-    // allowed_branches: no-op in PostgreSQL path (scoping is by org_id)
 
     if (data.password !== undefined) {
       updates.password_hash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);

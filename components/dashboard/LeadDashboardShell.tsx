@@ -42,8 +42,8 @@ import { buildLeadExportColumns } from '@/src/lib/export/lead-columns';
 import { buildFilename, exportRows, type ExportFormat } from '@/src/lib/export/export';
 
 const INLINE_ASSIGN_ROLES: ReadonlyArray<SessionUser['role']> = [
-  'super_admin', 'tenant_admin', 'org_admin', 'admin',
-  'org_manager', 'manager', 'senior_sales_executive',
+  'super_admin', 'tenant_admin', 'org_admin', 'org_sr_manager',
+  'org_manager', 'senior_sales_executive',
 ];
 
 export type CardFilter =

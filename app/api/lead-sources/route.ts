@@ -9,7 +9,7 @@ import { withServiceTx } from "@/src/lib/db/transaction";
 
 export const dynamic = "force-dynamic";
 
-const TENANT_WIDE_ROLES = new Set(["super_admin", "admin", "tenant_admin"]);
+const TENANT_WIDE_ROLES = new Set(["super_admin", "tenant_admin"]);
 
 export const GET = withRoute(async (_req, session) => {
   const orgFilter = TENANT_WIDE_ROLES.has(session.role)

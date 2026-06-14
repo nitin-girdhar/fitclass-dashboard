@@ -22,7 +22,6 @@ function mapRow(r: any, roleOverride?: string): DatabaseUser {
     password_hash: (r.password_hash ?? "") as string,
     role: (r.role ?? roleOverride ?? "sales_representative") as any,
     rank: Number(r.rank ?? 0),
-    allowed_branches: [],
     is_active: Boolean(r.is_active),
     password_changed_at: String(r.password_changed_at ?? r.created_at ?? ""),
     force_password_change: Boolean(r.force_password_change),

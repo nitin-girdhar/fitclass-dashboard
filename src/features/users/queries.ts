@@ -22,7 +22,6 @@ function mapUserRow(r: any): DatabaseUser {
     password_hash:         (r.password_hash ?? '') as string,
     role:                  r.role as UserRole,
     rank:                  Number(r.rank ?? 0),
-    allowed_branches:      [] as string[],
     is_active:             r.is_active as boolean,
     password_changed_at:   String(r.password_changed_at ?? r.created_at ?? ''),
     force_password_change: Boolean(r.force_password_change),
@@ -115,7 +114,7 @@ export async function countActiveAdmins(): Promise<number> {
       SELECT COUNT(*) AS count
       FROM users u
       JOIN user_roles ur ON ur.id = u.role_id
-      WHERE ur.name = 'admin' AND u.is_active = true AND NOT u.is_deleted
+      WHERE ur.name = 'org_admin' AND u.is_active = true AND NOT u.is_deleted
     `);
     return Number((rows[0] as any)?.count ?? 0);
   });

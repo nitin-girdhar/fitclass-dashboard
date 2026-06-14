@@ -7,7 +7,7 @@ import Placeholder from '@/components/dashboard/Placeholder';
 export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
-  await requireMinimumRole('admin'); // org_admin, admin, tenant_admin, super_admin
+  await requireMinimumRole('org_admin');
   return (
     <Placeholder
       title="Analytics"

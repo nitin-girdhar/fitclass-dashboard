@@ -71,7 +71,7 @@ async function main(): Promise<void> {
     name: SEED_ADMIN_NAME,
     email,
     password_hash,
-    role: 'admin',
+    role: 'org_admin',
     is_active: true,
     org_id: SEED_ORG_ID,
   });

@@ -12,7 +12,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { SessionUser } from '@/src/types/auth';
-import { CANONICAL_ROLES, ROLE_LABELS, ROLE_RANK } from '@/src/features/auth/constants';
+import { ROLES, ROLE_LABELS, ROLE_RANK } from '@/src/features/auth/constants';
 import { canCreateUser } from '@/src/lib/permissions';
 import { RoleBadge } from '@/components/dashboard/RoleBadge';
 import UserStatusBadge from './UserStatusBadge';
@@ -98,7 +98,7 @@ export default function UsersTable({ users, currentUserId, actorRank, onEdit }: 
           className="rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs font-semibold text-[#475569] shadow-sm focus:border-[#0b6cbf] focus:outline-none focus:ring-2 focus:ring-[#0b6cbf]/20"
         >
           <option value="all">All roles</option>
-          {CANONICAL_ROLES.filter((r) => canCreateUser(actorRank, ROLE_RANK[r] ?? 0)).map((r) => (
+          {ROLES.filter((r) => canCreateUser(actorRank, ROLE_RANK[r] ?? 0)).map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
             </option>

@@ -37,7 +37,7 @@ export async function POST(
   req: NextRequest,
   ctx: RouteContext,
 ): Promise<NextResponse> {
-  const gate = await requireRoleApi('admin');
+  const gate = await requireRoleApi('org_admin');
   if (!gate.ok) return gate.response;
   const actor = gate.session;
 

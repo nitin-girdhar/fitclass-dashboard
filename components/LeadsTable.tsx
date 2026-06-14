@@ -117,9 +117,8 @@ const CAN_ASSIGN_ROLES: ReadonlyArray<SessionUser["role"]> = [
   "super_admin",
   "tenant_admin",
   "org_admin",
-  "admin",
+  "org_sr_manager",
   "org_manager",
-  "manager",
   "senior_sales_executive",
 ];
 

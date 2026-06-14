@@ -10,7 +10,7 @@
  *
  * Composition pattern:
  *
- *   const gate = await requireRoleApi('admin');
+ *   const gate = await requireRoleApi('org_admin');
  *   if (!gate.ok) return gate.response;
  *   // gate.session is a verified, role-checked SessionUser
  */

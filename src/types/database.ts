@@ -41,7 +41,6 @@ export interface DatabaseUser {
   role: UserRole;
   /** Privilege rank from user_roles.rank via JOIN at query time. */
   rank: number;
-  allowed_branches: string[];
   is_active: boolean;
   /**
    * Watermark for JWT invalidation. Each minted token embeds `pwd_iat` =
@@ -62,7 +61,6 @@ export interface DatabaseUserInsert {
   email: string;
   password_hash: string;
   role?: UserRole;
-  allowed_branches?: string[];
   is_active?: boolean;
   force_password_change?: boolean;
 }
@@ -72,7 +70,6 @@ export interface DatabaseUserUpdate {
   name?: string;
   password_hash?: string;
   role?: UserRole;
-  allowed_branches?: string[];
   is_active?: boolean;
   password_changed_at?: string;
   force_password_change?: boolean;

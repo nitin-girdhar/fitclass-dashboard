@@ -3,11 +3,11 @@
 /**
  * UX-only permission wrapper.
  *
- *   <Protected user={user} roles={['admin']}>
+ *   <Protected user={user} roles={['org_admin']}>
  *     <DeleteAllUsersButton />
  *   </Protected>
  *
- *   <Protected user={user} minRole="manager" fallback={<UpgradeHint />}>
+ *   <Protected user={user} minRole="org_manager" fallback={<UpgradeHint />}>
  *     <AssignDialog />
  *   </Protected>
  *

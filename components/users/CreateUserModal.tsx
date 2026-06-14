@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SessionUser, UserRole } from '@/src/types/auth';
 const PHONE_RE = /^(\+91[\s-]?)?[6-9]\d{9}$/;
-import { CANONICAL_ROLES, ROLE_RANK } from '@/src/features/auth/constants';
+import { ROLES, ROLE_RANK } from '@/src/features/auth/constants';
 import { canCreateUser } from '@/src/lib/permissions';
 import Modal from './Modal';
 import RoleSelector from './RoleSelector';
@@ -26,7 +26,7 @@ interface CreateSuccess {
 }
 
 function defaultCreatableRole(actorRank: number): UserRole | null {
-  for (const r of CANONICAL_ROLES) {
+  for (const r of ROLES) {
     if (canCreateUser(actorRank, ROLE_RANK[r] ?? 0)) return r;
   }
   return null;
@@ -35,7 +35,7 @@ function defaultCreatableRole(actorRank: number): UserRole | null {
 export default function CreateUserModal({ open, onClose, actorRank, users, actor }: Props) {
   const router = useRouter();
   const initialRole = useMemo(
-    () => defaultCreatableRole(actorRank) ?? 'sales_executive',
+    () => defaultCreatableRole(actorRank) ?? 'sales_representative',
     [actorRank],
   );
   const [firstName, setFirstName] = useState('');

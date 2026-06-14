@@ -1,11 +1,9 @@
 /**
- * /dashboard/users — manager+ user-management (Phase 2H hierarchy).
+ * /dashboard/users — org_manager+ user-management.
  *
- * Server-side authority gate: `requireMinimumRole('manager')`. Inside, the
- * user list is scoped per `canCreateUser(actor.role, target.role)` so a
- * manager only sees users they can actually create / edit (the sales tier);
- * admin sees everyone. Sales-tier users hitting this URL are redirected
- * to /dashboard by `requireMinimumRole`.
+ * Server-side authority gate: `requireMinimumRole('senior_sales_executive')`.
+ * The user list is scoped by `canViewUser(actor, target)` so each actor only
+ * sees the rows appropriate to their rank. SSE can view but not create/edit.
  *
  * Mutations trigger `router.refresh()` in the modals so this server
  * component re-runs with the latest data.
@@ -38,7 +36,6 @@ export default async function UsersPage() {
       canViewUser(actor, {
         id: u.id,
         rank: u.rank ?? 0,
-        allowed_branches: u.allowed_branches,
       }),
     ),
   );

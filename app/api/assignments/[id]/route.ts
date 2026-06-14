@@ -2,24 +2,17 @@
  * PATCH  /api/assignments/[id] — reassign to a new user
  * DELETE /api/assignments/[id] — unassign (lead returns to unowned)
  *
- * Authorization (Phase 2I) mirrors POST (see ../route.ts):
- *  - admin / manager / senior_sales_executive only (SE has no assign rights).
- *  - Branch authority: admin bypasses; manager / SSE need the assignment's
- *    branch in their `allowed_branches` (`canAssignLeadWithinBranch`).
+ * Authorization mirrors POST (see ../route.ts):
+ *  - senior_sales_executive or above only.
  *  - Target-role routing (PATCH only): `canAssignToUser` matrix —
- *      admin→anyone, manager→sales tier, SSE→sales_executive only.
- *  - Target must share branch scope (admin actor skips this check).
+ *      admin→anyone, manager→SSE + SE, SSE→SE only.
  *
  * All denials emit a `privilege_denied_attempt` audit row.
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireMinimumRoleApi } from '@/src/lib/permissions/api';
-import { canAssignLeadWithinBranch } from '@/src/lib/permissions/leads';
-import {
-  canAssignLeadToBranch,
-  canAssignToUser,
-} from '@/src/lib/permissions/assignments';
+import { canAssignToUser } from '@/src/lib/permissions/assignments';
 import { updateAssignmentSchema } from '@/src/features/assignments/validators';
 import {
   reassignLead,
@@ -30,6 +23,7 @@ import { toAssignmentView } from '@/src/features/assignments/serializers';
 import { getUserById } from '@/src/features/users/queries';
 import { toSessionUser } from '@/src/features/users/serializers';
 import { logPrivilegeDeniedAttempt } from '@/src/features/activities/mutations';
+import { RANKS } from '@/src/lib/permissions/ranks';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,15 +61,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
 
-  // Branch authority.
-  if (!canAssignLeadWithinBranch(actor, { branch: existing.branch })) {
-    await logPrivilegeDeniedAttempt(actor.id, 'reassign_lead_branch', {
-      assignment_id: id,
-      branch: existing.branch,
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   // Resolve new owner.
   const targetRow = await getUserById(input.assigned_to);
   if (!targetRow || !targetRow.is_active) {
@@ -86,13 +71,10 @@ export async function PATCH(
   }
   const target = toSessionUser(targetRow);
 
-  // ── PRIVILEGE-ESCALATION GUARD (target-role routing + Phase 2L rules) ───
-  // A reassign carries the same risk as a fresh assign — same predicate
-  // applies. Blocks admin-target, self-assignment, and upward/sideways
-  // role routing.
+  // ── PRIVILEGE-ESCALATION GUARD (target-role routing) ────────────────────
   if (!canAssignToUser(actor.rank, target.rank, actor.id, target.id)) {
     const reason: string =
-      target.role === 'admin'
+      target.rank >= RANKS.ADMIN
         ? 'admin_target'
         : actor.id === target.id
           ? 'self_assignment'
@@ -112,29 +94,12 @@ export async function PATCH(
     return NextResponse.json({ error: message }, { status: 403 });
   }
 
-  // ── BRANCH INTEGRITY (Phase 2K) ─────────────────────────────────────────
-  // Same rule as POST: applies to every actor including admin. A reassign
-  // to a user outside the branch produces a ghost assignment.
-  if (!canAssignLeadToBranch(target, existing.branch)) {
-    await logPrivilegeDeniedAttempt(actor.id, 'reassign_lead_branch_scope', {
-      assignment_id: id,
-      branch: existing.branch,
-      target_id: target.id,
-      target_branches: target.allowed_branches,
-    });
-    return NextResponse.json(
-      { error: 'Target user is not scoped to this lead\'s branch' },
-      { status: 403 },
-    );
-  }
-
   const updated = await reassignLead({
     id,
     assignedTo: input.assigned_to,
     actorId: actor.id,
     notes: input.notes ?? null,
   });
-  // Invalidate assignments page cache so the new owner shows up there too.
   revalidatePath('/dashboard/assignments');
   return NextResponse.json({ assignment: toAssignmentView(updated) }, { status: 200 });
 }
@@ -153,16 +118,8 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
-  if (!canAssignLeadWithinBranch(actor, { branch: existing.branch })) {
-    await logPrivilegeDeniedAttempt(actor.id, 'unassign_lead_branch', {
-      assignment_id: id,
-      branch: existing.branch,
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   await unassignLead({ id, actorId: actor.id });
-  // Drop the row from the assignments page on next navigation.
   revalidatePath('/dashboard/assignments');
   return NextResponse.json({ success: true }, { status: 200 });
 }

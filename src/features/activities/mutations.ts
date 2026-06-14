@@ -116,7 +116,6 @@ export interface UserAuditSnapshot {
   email: string;
   name: string;
   role: string;
-  allowed_branches: string[];
   is_active: boolean;
 }
 
@@ -129,7 +128,6 @@ export function sanitizeUserForAudit(user: {
   email: string;
   name: string;
   role: string;
-  allowed_branches: string[];
   is_active: boolean;
 }): UserAuditSnapshot {
   return {
@@ -137,7 +135,6 @@ export function sanitizeUserForAudit(user: {
     email: user.email,
     name: user.name,
     role: user.role,
-    allowed_branches: [...user.allowed_branches],
     is_active: user.is_active,
   };
 }

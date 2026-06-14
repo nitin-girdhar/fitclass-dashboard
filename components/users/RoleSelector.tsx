@@ -13,7 +13,7 @@
  * role is rejected with 403 regardless of what the dropdown offered.
  */
 import { useMemo } from 'react';
-import { CANONICAL_ROLES, ROLE_LABELS, ROLE_RANK } from '@/src/features/auth/constants';
+import { ROLES, ROLE_LABELS, ROLE_RANK } from '@/src/features/auth/constants';
 import type { UserRole } from '@/src/types/auth';
 import { canCreateUser } from '@/src/lib/permissions';
 
@@ -39,7 +39,7 @@ export default function RoleSelector({
   // ROLE_RANK is used here only to translate target role strings → rank for
   // the canCreateUser predicate (actor rank comes from the DB via JWT).
   const options = useMemo(
-    () => CANONICAL_ROLES.filter((r) => canCreateUser(actorRank, ROLE_RANK[r] ?? 0)),
+    () => ROLES.filter((r) => canCreateUser(actorRank, ROLE_RANK[r] ?? 0)),
     [actorRank],
   );
 

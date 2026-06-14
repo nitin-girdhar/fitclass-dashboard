@@ -7,7 +7,7 @@ import Placeholder from '@/components/dashboard/Placeholder';
 export const dynamic = 'force-dynamic';
 
 export default async function TeamPage() {
-  await requireMinimumRole('manager');
+  await requireMinimumRole('org_manager');
   return (
     <Placeholder
       title="Team"

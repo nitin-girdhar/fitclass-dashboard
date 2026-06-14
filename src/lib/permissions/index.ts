@@ -105,40 +105,22 @@ export function canCreateUser(actorRank: number, targetRank: number): boolean {
 /**
  * Who is the actor allowed to SEE in the user-management surface? (Phase 2W)
  *
- *  - admin → all users
- *  - manager → themselves + any non-admin in branch overlap
- *  - SSE → themselves + SE in branch overlap (view-only)
+ *  - org_admin+ → all users in org
+ *  - org_manager → themselves + any non-admin in org
+ *  - SSE → themselves + SE in org (view-only)
  *  - SE → only themselves
  *
- * Distinct from `canCreateUser` (the authority predicate): visibility is
- * broader than edit authority. A manager SEES every non-admin in their
- * branch (operational oversight) but the UsersTable hides Edit for rows
- * where `canCreateUser` returns false.
- *
- * Branch overlap rule: targets with empty `allowed_branches` only appear
- * to admin — prevents an unrestricted user from showing up in every
- * manager's table.
+ * Org scoping is enforced by the DB query (listUsers scoped by org_id).
+ * This predicate applies the role-hierarchy filter within the already-scoped list.
  */
 export function canViewUser(
   actor: SessionUser | null | undefined,
-  target: { id: string; rank: number; allowed_branches: string[] },
+  target: { id: string; rank: number },
 ): boolean {
   if (!actor) return false;
   if (actor.rank >= RANKS.ADMIN) return true;
   if (target.id === actor.id) return true;
   if (target.rank >= RANKS.ADMIN) return false;
-
-  // allowed_branches is [] for org-scoped users (the DB query already scoped
-  // results). Two empty arrays → treat as overlap so managers can see their team.
-  const overlaps =
-    (target.allowed_branches.length > 0 &&
-      target.allowed_branches.some((b) =>
-        actor.allowed_branches.includes(b),
-      )) ||
-    (actor.allowed_branches.length === 0 &&
-      target.allowed_branches.length === 0);
-  if (!overlaps) return false;
-
   if (actor.rank >= RANKS.MANAGER) return true;
   if (actor.rank === RANKS.SSE)
     return target.rank <= RANKS.sales_representative;
@@ -152,42 +134,15 @@ export function canAssignLeads(user: SessionUser | null | undefined): boolean {
 }
 
 /**
- * Branch-scoped data access. Foundation for multi-tenant lead isolation:
- *  - admin    → unrestricted by design
- *  - others   → allowed_branches empty == "no scope set yet, allow all"
- *               (legacy behaviour while branches are still seeded)
- *               otherwise the branch name must be on the user's list.
- *
- * `branch` is the org name — same identifier used everywhere else in the CRM.
+ * Branch-scoped data access. Org scoping is enforced via RLS and the DB
+ * query layer, so any authenticated user can access data in their org.
+ * Returns true for any non-null user.
  */
 export function canAccessBranch(
   user: SessionUser | null | undefined,
-  branch: string,
+  _branch: string,
 ): boolean {
-  if (!user) return false;
-  if (user.rank >= RANKS.ADMIN) return true; // admin tier → unrestricted
-  if (user.allowed_branches.length === 0) return true; // legacy unrestricted / new-DB org scope
-  return user.allowed_branches.includes(branch);
-}
-
-/**
- * Strict "does this user explicitly OWN this branch?" — no admin special-
- * case, no empty-list bypass.
- *
- * Distinct from the two adjacent predicates:
- *  - `canAccessLeadBranch`   → admin yes, empty yes, else `includes`
- *                              (used for READ authority on lead data)
- *  - `canAssignLeadToBranch` → empty yes (unrestricted), else `includes`
- *                              (used to validate ASSIGNEE scope)
- *  - `ownsBranch`            → `includes` only — strict ownership check
- *                              (used to enforce "manager can only delegate
- *                               sheets they own"; empty must NOT be a bypass)
- *
- * Three slightly different predicates serving three different concerns —
- * never collapse them.
- */
-export function ownsBranch(user: SessionUser, branch: string): boolean {
-  return user.allowed_branches.includes(branch);
+  return !!user;
 }
 
 /** Read analytics dashboards. Admin tier today; revisit for managers later. */

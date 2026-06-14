@@ -61,7 +61,6 @@ export const GET = withRoute(async (req, session) => {
     rank: r.role_rank ?? 0,
     orgId: r.org_id,
     name: r.full_name,
-    allowed_branches: [],
     is_active: true,
     force_password_change: false,
   }));

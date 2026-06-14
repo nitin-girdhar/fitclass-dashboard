@@ -39,7 +39,6 @@ function pgUserToSessionUser(user: any): SessionUser {
     roleLabel: user.roleLabel ?? undefined,
     name:
       user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-    allowed_branches: [],
     is_active: user.isActive ?? true,
     force_password_change: user.forcePasswordChange ?? false,
   };

@@ -12,7 +12,7 @@ import { ForbiddenError, ValidationError } from "@/src/lib/errors";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_ROLES = new Set(["org_admin", "admin", "tenant_admin", "super_admin"]);
+const ALLOWED_ROLES = new Set(["org_admin", "tenant_admin", "super_admin"]);
 
 const patchSchema = z.object({
   followupRequired: z.boolean(),

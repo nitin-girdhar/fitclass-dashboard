@@ -26,7 +26,6 @@ export function toSessionUser(row: DatabaseUser): SessionUser {
     manager_name: row.manager_name ?? null,
     last_login_at: row.last_login_at ?? null,
     mobile: row.mobile ?? null,
-    allowed_branches: row.allowed_branches,
     is_active: row.is_active,
     force_password_change: row.force_password_change,
   };

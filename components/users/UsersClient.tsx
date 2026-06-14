@@ -34,7 +34,7 @@ export default function UsersClient({ users, actor }: Props) {
   const canCreate = canManageUsers(actor);
 
   const subtitle =
-    actor.role === "admin"
+    actor.rank >= 80
       ? `${users.length} total · admin scope (all users)`
       : canCreate
         ? `${users.length} total · scoped to roles you can manage`

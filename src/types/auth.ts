@@ -10,7 +10,7 @@
  */
 import type { ROLES } from '@/src/features/auth/constants';
 
-/** admin | manager | sales — extend via the ROLES tuple, not here. */
+/** Canonical role union — extend via the ROLES tuple in constants, not here. */
 export type UserRole = (typeof ROLES)[number];
 
 /**
@@ -48,13 +48,6 @@ export interface SessionUser {
   last_login_at?: string | null;
   /** Mobile number. */
   mobile?: string | null;
-  /**
-   * Branch scopes for non-admin users (sheet/tab names). An EMPTY array means
-   * unrestricted — admins are always unrestricted regardless of this field.
-   * This is the foundation for branch-scoped RBAC; `canAccessBranch` in
-   * src/lib/permissions/index.ts is the only place that interprets it today.
-   */
-  allowed_branches: string[];
   /**
    * Whether the user's account is enabled. Always `true` for the CURRENT
    * authenticated session (inactive users cannot log in), but may be `false`

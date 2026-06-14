@@ -1,7 +1,7 @@
 /**
  * Lead-level permissions — adapted for PostgreSQL org hierarchy.
  *
- * Maps new PostgreSQL user_roles to permission levels:
+ * Maps PostgreSQL user_roles to permission levels:
  *  - super_admin, tenant_admin, org_admin → full access
  *  - org_manager, senior_sales_executive → branch/team-level
  *  - sales_representative → individual leads
@@ -32,14 +32,12 @@ export function canViewLeadData(
 ): boolean {
   if (!user || user.role === "read_only") return false;
 
-  // Org isolation enforced by RLS; canViewLeadData assumes user is in the same org
   const adminRoles = ["super_admin", "tenant_admin", "org_admin"];
   if (adminRoles.includes(user.role)) return true;
 
   const managerRoles = ["org_manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
-  // sales_representative can view own leads + unassigned pool
   if (user.role === "sales_representative") {
     return lead.assignedToUserId === user.id || !lead.assignedToUserId;
   }
@@ -62,23 +60,11 @@ export function canEditLead(
   const managerRoles = ["org_manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
-  // sales_representative can only edit own leads
   if (user.role === "sales_representative") {
     return lead.assignedToUserId === user.id;
   }
 
   return false;
-}
-
-/**
- * Can the user assign/reassign this lead?
- * (Alias kept for backward compatibility with older call sites.)
- */
-export function canAssignLeadWithinBranch(
-  user: SessionUser | null | undefined,
-  lead: LeadContext,
-): boolean {
-  return canAssignLead(user, lead);
 }
 
 /**
@@ -90,14 +76,14 @@ export function canAssignLead(
 ): boolean {
   if (!user || user.role === "read_only") return false;
 
-  const adminRoles = ["super_admin", "tenant_admin", "org_admin", "admin"];
+  const adminRoles = ["super_admin", "tenant_admin", "org_admin"];
   if (adminRoles.includes(user.role)) return true;
 
-  const managerRoles = ["org_manager", "manager", "senior_sales_executive"];
+  const managerRoles = ["org_manager", "senior_sales_executive"];
   if (managerRoles.includes(user.role)) return true;
 
   // sales_representative can only self-assign from unassigned pool
-  if (user.role === "sales_representative" || user.role === "sales_executive") {
+  if (user.role === "sales_representative") {
     return !lead.assignedToUserId;
   }
 
@@ -116,9 +102,7 @@ export function canCreateCampaign(
     "super_admin",
     "tenant_admin",
     "org_admin",
-    "admin",
     "org_manager",
-    "manager",
   ];
   return allowed.includes(user.role);
 }
@@ -129,6 +113,6 @@ export function canCreateCampaign(
 export function canManageUsers(user: SessionUser | null | undefined): boolean {
   if (!user) return false;
 
-  const allowed = ["super_admin", "tenant_admin", "org_admin", "admin"];
+  const allowed = ["super_admin", "tenant_admin", "org_admin"];
   return allowed.includes(user.role);
 }
