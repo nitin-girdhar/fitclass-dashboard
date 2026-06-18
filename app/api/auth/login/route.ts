@@ -84,11 +84,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!ok) return fail();
 
     // Fetch all orgs this user has access to
-    const orgs = await getUserOrgAccessFromProvider(user.id);
+    let orgs: OrgAccess[] = [];
+    try {
+      orgs = await getUserOrgAccessFromProvider(user.id);
+    } catch (err) {
+      console.error("[Login] Failed to fetch org access rows:", err);
+    }
 
     if (orgs.length === 0) {
-      console.error("[Login] User has no org access rows:", user.id);
-      return fail();
+      // Fallback: use the user's primary org/role from the users table.
+      // This handles the pre-migration state where user_org_access is empty.
+      if (user.orgId && user.role && user.rank != null) {
+        orgs = [{
+          orgId: user.orgId,
+          orgName: user.orgName ?? "",
+          role: user.role as OrgAccess["role"],
+          rank: user.rank,
+          roleLabel: user.roleLabel ?? user.role,
+        }];
+      } else {
+        console.error("[Login] User has no org access rows:", user.id);
+        return fail();
+      }
     }
 
     // Resolve which org to use for this session
