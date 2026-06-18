@@ -28,6 +28,7 @@ export type AssignmentRowWithAssignee = Assignment & {
   assignee?: EmbeddedAssignee | null;
   lead_name?: string | null;
   lead_phone?: string | null;
+  assignee_role?: string | null;
   duplicate_lead_id?: string | null;
   duplicate_lead_platform?: string | null;
 };
@@ -45,6 +46,7 @@ export interface AssignmentView {
   /** Denormalised at query time so the UI never renders a raw UUID. */
   assignee_name: string | null;
   assignee_email: string | null;
+  assignee_role: string | null;
   /** Set when the walk-in matched an existing digital (campaign-sourced) lead. */
   duplicate_lead_id: string | null;
   /** Platform name of the matched digital lead (e.g. "facebook", "google"). */
@@ -64,6 +66,7 @@ export function toAssignmentView(row: AssignmentRowWithAssignee): AssignmentView
     notes: row.notes,
     assignee_name: row.assignee?.name ?? null,
     assignee_email: row.assignee?.email ?? null,
+    assignee_role: row.assignee_role ?? null,
     duplicate_lead_id:       row.duplicate_lead_id       ?? null,
     duplicate_lead_platform: row.duplicate_lead_platform ?? null,
   };

@@ -7,7 +7,12 @@
  */
 import { z } from 'zod';
 
-const uuid = z.uuid('Must be a valid UUID');
+const uuid = z
+  .string()
+  .regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    'Must be a valid UUID',
+  );
 const nonEmpty = (label: string) =>
   z.string().trim().min(1, `${label} is required`).max(200);
 

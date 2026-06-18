@@ -37,7 +37,7 @@ SELECT
     ml.stage_id,
     ml.outcome_id,
     ac.name                     AS campaign_name,     -- NULL for organic leads
-    mp.name                     AS platform,          -- NULL for organic leads
+    mp.label                    AS platform,          -- NULL for organic leads
     u.full_name                 AS assigned_rep_name,
     u.email                     AS assigned_rep_email,
     ml.tags,
@@ -133,7 +133,7 @@ SELECT
     o.name                                                                  AS org_name,
     ac.id                                                                   AS campaign_id,
     ac.name                                                                 AS campaign_name,
-    mp.name                                                                 AS platform,
+    mp.label                                                                AS platform,
     cs.name                                                                 AS campaign_status,
     ac.budget,
     COALESCE(cls.total_leads, 0)::INT                                       AS total_leads,
@@ -210,7 +210,7 @@ org_platform AS (
     SELECT org_id, most_used_platform FROM (
         SELECT
             ac.org_id,
-            mp.name                                         AS most_used_platform,
+            mp.label                                        AS most_used_platform,
             COUNT(ml.id)                                    AS lead_count,
             ROW_NUMBER() OVER (
                 PARTITION BY ac.org_id
@@ -220,7 +220,7 @@ org_platform AS (
         JOIN  marketing_platforms mp ON mp.id = ac.platform_id
         LEFT JOIN marketing_leads ml ON ml.campaign_id = ac.id AND NOT ml.is_deleted
         WHERE NOT ac.is_deleted
-        GROUP BY ac.org_id, mp.name
+        GROUP BY ac.org_id, mp.label
     ) ranked WHERE rn = 1
 )
 SELECT
@@ -312,7 +312,7 @@ platform_usage AS (
     SELECT org_id, most_used_platform FROM (
         SELECT
             ac.org_id,
-            mp.name                                         AS most_used_platform,
+            mp.label                                        AS most_used_platform,
             COUNT(ml.id)                                    AS lead_count,
             ROW_NUMBER() OVER (
                 PARTITION BY ac.org_id ORDER BY COUNT(ml.id) DESC
@@ -321,7 +321,7 @@ platform_usage AS (
         JOIN  marketing_platforms mp ON mp.id = ac.platform_id
         LEFT JOIN marketing_leads ml ON ml.campaign_id = ac.id AND NOT ml.is_deleted
         WHERE NOT ac.is_deleted
-        GROUP BY ac.org_id, mp.name
+        GROUP BY ac.org_id, mp.label
     ) ranked WHERE rn = 1
 )
 SELECT

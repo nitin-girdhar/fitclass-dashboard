@@ -62,19 +62,23 @@ export function canAssignLead(
 }
 
 /**
- * Who is the actor allowed to assign WORK TO?
+ * Who is the actor allowed to assign leads TO?
  *
- *   actor \ target           │ admin │ manager │ sr.sales │ sales
- *   ─────────────────────────┼───────┼─────────┼──────────┼───────
- *   admin                    │   ✗   │    ✓    │    ✓     │   ✓
- *   manager                  │   ✗   │    ✗    │    ✓     │   ✓
- *   senior_sales_executive   │   ✗   │    ✗    │    ✗     │   ✓
- *   sales_representative     │   ✗   │    ✗    │    ✗     │   ✗
+ * Eligible targets: READ_ONLY < rank < ADMIN
+ *   (org_sr_manager, org_manager, senior_sales_executive, sales_representative)
+ * Ineligible targets: super_admin, tenant_admin, org_admin (non-operational),
+ *                     read_only (view-only), self (no self-assignment)
  *
- *   PLUS: target.rank >= ADMIN → ✗  (admins never receive leads)
- *   PLUS: actor.id === target.id → ✗  (no self-assignment)
+ *   actor \ target       │ sr_mgr(70) │ manager(60) │ sse(40) │ sales(20)
+ *   ─────────────────────┼────────────┼─────────────┼─────────┼──────────
+ *   admin (≥80)          │     ✓      │      ✓      │    ✓    │    ✓
+ *   org_sr_manager (70)  │     ✓*     │      ✓      │    ✓    │    ✓
+ *   org_manager (60)     │     ✗      │      ✓*     │    ✓    │    ✓
+ *   sse (40)             │     ✗      │      ✗      │    ✓*   │    ✓
+ *   sales_rep (20)       │     ✗      │      ✗      │    ✗    │    ✓*
+ *   (* same-rank peer — allowed; self — always ✗)
  *
- * Pure 4-argument predicate — composes cleanly with `requireMinimumRoleApi`.
+ * Pure predicate — enforced both in the API routes and the UI filter.
  */
 export function canAssignToUser(
   actorRank: number,
@@ -82,11 +86,14 @@ export function canAssignToUser(
   actorId: string,
   targetUserId: string,
 ): boolean {
+  // Self-assignment never allowed
+  if (actorId === targetUserId) return false;
+  // read_only is view-only — never a valid assignee
   if (targetRank <= RANKS.READ_ONLY) return false;
-  // Admin-tier users are never assignment targets (non-operational)
+  // Admin-tier (org_admin and above) are non-operational — never receive leads
   if (targetRank >= RANKS.ADMIN) return false;
-  // Admin tier can assign to any non-admin-tier, non-read_only user
+  // Admin-tier actors can assign to any eligible target
   if (actorRank >= RANKS.ADMIN) return true;
-  // Below admin: actor must have same rank or higher than target
+  // Non-admin: can only assign to peers or lower (no upward assignment)
   return actorRank >= targetRank;
 }

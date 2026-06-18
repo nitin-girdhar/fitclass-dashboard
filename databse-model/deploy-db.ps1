@@ -45,7 +45,7 @@
     .\deploy-db.ps1 -SeedPassword "MyPass@99"
 #>
 param(
-    [string]$Database      = "crm",
+    [string]$Database      = "crm_mono",
     [string]$DbHost        = "localhost",
     [string]$Port          = "5433",
     [string]$User          = "sa",
@@ -113,7 +113,7 @@ Write-Host " ready." -ForegroundColor Green
 # ===========================================================================
 Write-Step "Step 4 - Deploy schema (databse-model/*.sql)"
 
-$scriptDir = Join-Path $PSScriptRoot "databse-model"
+$scriptDir = $PSScriptRoot
 
 # Prefer local psql; fall back to docker exec
 $useDocker = $false
@@ -136,12 +136,12 @@ function Invoke-Psql {
     }
 }
 
-# Create database if absent
+# Drop and recreate database
+Invoke-Psql -Db "postgres" -ExtraArgs @("-c", "DROP DATABASE IF EXISTS `"$Database`";") 2>&1 | Out-Null
+Write-Host "    Dropped database '$Database' (if it existed)."
 $createOut = Invoke-Psql -Db "postgres" -ExtraArgs @("-c", "CREATE DATABASE `"$Database`";") 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Host "    Created database '$Database'."
-} elseif ("$createOut" -match "already exists") {
-    Write-Host "    Database '$Database' already exists."
 } else {
     Write-Error "Could not create database: $createOut"
 }
@@ -156,16 +156,23 @@ $i = 0
 foreach ($script in $scripts) {
     $i++
     Write-Host "    [$i/$total] $($script.Name) ..."
+    $tmpErr = [System.IO.Path]::GetTempFileName()
     if ($useDocker) {
         Get-Content $script.FullName -Raw |
             & docker exec -i -e "PGPASSWORD=$Password" $ContainerName `
-                psql -U $User -d $Database -v ON_ERROR_STOP=1
+                psql -U $User -d $Database -v ON_ERROR_STOP=1 2>$tmpErr
     } else {
-        Invoke-Psql -Db $Database -ExtraArgs @("-v", "ON_ERROR_STOP=1", "-f", $script.FullName)
+        & psql -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -f $script.FullName 2>$tmpErr
     }
     if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Get-Content $tmpErr -ErrorAction SilentlyContinue |
+            Where-Object { $_ -match '^(ERROR|DETAIL|HINT|CONTEXT|FATAL)' } |
+            ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Remove-Item $tmpErr -ErrorAction SilentlyContinue
         Write-Error "Failed at $($script.Name). Deployment halted."
     }
+    Remove-Item $tmpErr -ErrorAction SilentlyContinue
 }
 Write-OK "All $total scripts applied"
 

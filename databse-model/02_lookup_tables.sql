@@ -36,9 +36,11 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 
 CREATE TABLE IF NOT EXISTS marketing_platforms (
-    id          SMALLINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    name        TEXT     UNIQUE NOT NULL,
-    description TEXT
+    id            SMALLINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    name          TEXT     UNIQUE NOT NULL,
+    label         TEXT     NOT NULL DEFAULT '',
+    description   TEXT,
+    display_order SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS campaign_statuses (
@@ -123,8 +125,8 @@ CREATE TABLE IF NOT EXISTS cities (
 --                      warehouse=5 showroom=6 head_office=7
 --   user_roles:        super_admin=1 tenant_admin=2 org_admin=3 org_sr_manager=4
 --                      org_manager=5 senior_sales_executive=6 sales_representative=7 read_only=8
---   marketing_platforms: facebook=1 google=2 linkedin=3 instagram=4
---                        tiktok=5 organic=6 referral=7 whatsapp_ads=8
+--   marketing_platforms: meta=1 google_ads=2 website=3 walk_in=4 referral=5
+--                        staff_referral=6 linkedin=7 whatsapp=8 tiktok=9
 --   campaign_statuses: draft=1 active=2 paused=3 completed=4 archived=5
 --   lead_stage:        new=1 contacting=2 qualified=3 converted=4
 --                      unqualified=5 transferred_out=6
@@ -174,20 +176,21 @@ INSERT INTO user_roles (name, description, rank, label) VALUES
     ('org_sr_manager',         'Manages a team of managers and reps within an org',                               70, 'Senior Manager'),
     ('org_manager',            'Manages a team of Senior Sales Executives and reps within an org',                60, 'Manager'),
     ('senior_sales_executive', 'Senior Sales Executive - manages a team of sales reps; reports to org_manager',   40, 'Senior Sales Executive'),
-    ('sales_representativeresentative',              'Front-line sales - manages own assigned leads and follow-ups',                     20, 'Sales Representative'),
+    ('sales_representative',              'Front-line sales - manages own assigned leads and follow-ups',                     20, 'Sales Representative'),
     ('read_only',              'Read-only viewer - dashboards and reports only',                                    0, 'Read Only')
 ON CONFLICT (name) DO UPDATE SET rank = EXCLUDED.rank, label = EXCLUDED.label, description = EXCLUDED.description;
 
-INSERT INTO marketing_platforms (name, description) VALUES
-    ('facebook',     'Facebook / Instagram Lead Ads and Campaigns'),
-    ('google',       'Google Ads (Search, Display, Shopping, Performance Max)'),
-    ('linkedin',     'LinkedIn Lead Gen Forms and sponsored content'),
-    ('instagram',    'Instagram organic and paid posts'),
-    ('tiktok',       'TikTok for Business lead generation'),
-    ('organic',      'Walk-in, direct website, or offline enquiry with no paid source'),
-    ('referral',     'Referred by an existing customer or partner'),
-    ('whatsapp_ads', 'WhatsApp click-to-chat ads via Facebook Ads Manager')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO marketing_platforms (name, label, display_order) VALUES
+    ('meta',           'Meta',           1),
+    ('google_ads',     'Google Ads',     2),
+    ('website',        'Website',        3),
+    ('walk_in',        'Walk-in',        4),
+    ('referral',       'Referral',       5),
+    ('staff_referral', 'Staff Referral', 6),
+    ('linkedin',       'LinkedIn',       7),
+    ('whatsapp',       'WhatsApp',       8),
+    ('tiktok',         'TikTok',         9)
+ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label, display_order = EXCLUDED.display_order;
 
 INSERT INTO campaign_statuses (name, description) VALUES
     ('draft',     'Campaign created but not yet submitted for review or activation'),

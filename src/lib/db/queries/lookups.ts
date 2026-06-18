@@ -38,7 +38,7 @@ export async function getAllLookups() {
       states,
     ] = await Promise.all([
       tx`SELECT id, name, description, label, followup_required, is_rejected, is_terminated, display_order FROM lead_stage ORDER BY display_order`,
-      tx`SELECT id, name, description FROM marketing_platforms ORDER BY id`,
+      tx`SELECT id, name, label, description FROM marketing_platforms ORDER BY display_order`,
       tx`SELECT id, name, label, description FROM user_roles ORDER BY rank DESC`,
       tx`SELECT id, name, description FROM campaign_statuses ORDER BY id`,
       tx`SELECT id, name, description FROM follow_up_statuses ORDER BY id`,

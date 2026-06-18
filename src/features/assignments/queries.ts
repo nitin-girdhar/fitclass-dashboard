@@ -28,10 +28,12 @@ const ASSIGNED_LEADS_SELECT = `
     NULL::text                                     AS notes,
     u.full_name                                    AS assignee_name,
     u.email                                        AS assignee_email,
+    ur.label                                       AS assignee_role,
     ml.duplicate_lead_id::text                    AS duplicate_lead_id,
-    dup_mp.name                                   AS duplicate_lead_platform
+    dup_mp.label                                  AS duplicate_lead_platform
   FROM marketing_leads ml
   JOIN users u ON u.id = ml.assigned_user_id
+  LEFT JOIN user_roles ur ON ur.id = u.role_id
   LEFT JOIN organizations o ON o.id = ml.org_id
   LEFT JOIN marketing_leads dup_ml ON dup_ml.id = ml.duplicate_lead_id
   LEFT JOIN ad_campaigns dup_ac ON dup_ac.id = dup_ml.campaign_id
@@ -51,6 +53,7 @@ function mapRow(r: any): AssignmentRowWithAssignee {
     assigned_by: r.assigned_by as string,
     assigned_at: String(r.assigned_at ?? ''),
     notes:       null,
+    assignee_role:           (r.assignee_role           ?? null) as string | null,
     duplicate_lead_id:       (r.duplicate_lead_id       ?? null) as string | null,
     duplicate_lead_platform: (r.duplicate_lead_platform ?? null) as string | null,
     assignee: {

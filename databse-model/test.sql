@@ -27,3 +27,7 @@ where email = 'nisha.goyal@fitclass.in';
 
 select *
 from public.marketing_platforms
+
+
+
+

@@ -11,13 +11,10 @@ import { NextResponse } from "next/server";
 import { withRoute } from "@/src/lib/api/route-handler";
 import { withServiceTx } from "@/src/lib/db/transaction";
 import { ForbiddenError } from "@/src/lib/errors";
+import { RANKS } from "@/src/lib/permissions/ranks";
 import type { SessionUser } from "@/src/types/auth";
 
 export const dynamic = "force-dynamic";
-
-const MIN_ASSIGNER_RANK = 40; // senior_sales_executive and above
-const ADMIN_RANK = 80;
-const READ_ONLY_RANK = 0;
 
 type AssignableRow = {
   id: string;
@@ -29,7 +26,7 @@ type AssignableRow = {
 };
 
 export const GET = withRoute(async (req, session) => {
-  if (session.rank < MIN_ASSIGNER_RANK) {
+  if (session.rank < RANKS.SSE) {
     throw new ForbiddenError("Insufficient rank to assign leads");
   }
 
@@ -49,8 +46,9 @@ export const GET = withRoute(async (req, session) => {
          AND ur.rank > $2
          AND ur.rank < $3
          AND ur.rank <= $4
+         AND u.id != $5
        ORDER BY ur.rank DESC, u.full_name`,
-      [orgId, READ_ONLY_RANK, ADMIN_RANK, session.rank],
+      [orgId, RANKS.READ_ONLY, RANKS.ADMIN, session.rank, session.id],
     );
   });
 

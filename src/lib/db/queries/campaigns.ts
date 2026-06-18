@@ -11,14 +11,14 @@ import type { Campaign } from "@/src/types/db";
 export async function getCampaigns(orgId: string, userId: string) {
   return withOrgTx(orgId, userId, async (tx) => {
     return tx`
-      SELECT ac.*, mp.name as platform_name, cs.name as status_name,
+      SELECT ac.*, mp.label as platform_name, cs.name as status_name,
              COUNT(ml.id) FILTER (WHERE NOT ml.is_deleted) as lead_count
       FROM ad_campaigns ac
       JOIN marketing_platforms mp ON mp.id = ac.platform_id
       JOIN campaign_statuses cs ON cs.id = ac.status_id
       LEFT JOIN marketing_leads ml ON ml.campaign_id = ac.id
       WHERE ac.org_id = ${orgId} AND NOT ac.is_deleted
-      GROUP BY ac.id, mp.name, cs.name
+      GROUP BY ac.id, mp.label, cs.name
       ORDER BY ac.created_at DESC
     `;
   });
@@ -34,7 +34,7 @@ export async function getCampaignById(
 ) {
   return withOrgTx(orgId, userId, async (tx) => {
     const [campaign] = await tx`
-      SELECT ac.*, mp.name as platform_name, cs.name as status_name
+      SELECT ac.*, mp.label as platform_name, cs.name as status_name
       FROM ad_campaigns ac
       JOIN marketing_platforms mp ON mp.id = ac.platform_id
       JOIN campaign_statuses cs ON cs.id = ac.status_id

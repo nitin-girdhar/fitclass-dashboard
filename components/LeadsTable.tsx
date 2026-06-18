@@ -15,6 +15,7 @@ import type { SessionUser } from "@/src/types/auth";
 import type { AssignmentView } from "@/src/features/assignments/serializers";
 import { FILTER_STATUSES } from "@/src/lib/leads/filter";
 import { LeadHistoryModal } from "./LeadHistoryModal";
+import UserPickerDropdown from "@/components/common/UserPickerDropdown";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -681,6 +682,26 @@ function LeadEditModal({
     );
   })();
 
+  // Build assignee picker list — prepend current assignee when they're outside
+  // the actor's assignable set (e.g. deactivated, from another branch) so the
+  // existing value is always selectable without losing it.
+  const assigneePickerUsers = useMemo(() => {
+    if (!origAssigneeId || candidates.some((c) => c.id === origAssigneeId)) {
+      return candidates;
+    }
+    const synth: SessionUser = {
+      id: origAssigneeId,
+      email: currentAssignment?.assignee_email ?? origAssigneeId,
+      name: currentAssignment?.assignee_name ?? null,
+      role: "sales_representative" as SessionUser["role"],
+      rank: 0,
+      orgId: "",
+      is_active: true,
+      force_password_change: false,
+    };
+    return [synth, ...candidates];
+  }, [origAssigneeId, candidates, currentAssignment]);
+
   if (typeof document === "undefined") return null;
 
   return createPortal(
@@ -819,27 +840,13 @@ function LeadEditModal({
                     Assigned To
                   </label>
                   {canAssign ? (
-                    <select
+                    <UserPickerDropdown
                       value={selectedAssigneeId ?? ""}
-                      onChange={(e) =>
-                        setSelectedAssigneeId(e.target.value || null)
-                      }
-                      className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm text-[#0F172A] focus:border-[#0b6cbf] focus:outline-none focus:ring-2 focus:ring-[#0b6cbf]/20"
-                    >
-                      <option value="">Unassigned</option>
-                      {/* Show current assignee even if not in pickable candidates */}
-                      {origAssigneeId &&
-                        !candidates.some((c) => c.id === origAssigneeId) && (
-                          <option value={origAssigneeId}>
-                            {currentAssigneeName ?? origAssigneeId} (current)
-                          </option>
-                        )}
-                      {candidates.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name ?? u.email}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(id) => setSelectedAssigneeId(id || null)}
+                      users={assigneePickerUsers}
+                      allowEmpty
+                      emptyLabel="Unassigned"
+                    />
                   ) : (
                     <div className="px-3 py-2 text-sm text-[#64748B]">
                       {currentAssigneeName ?? "Unassigned"}
@@ -923,23 +930,19 @@ function LeadEditModal({
                   <label className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
                     Assign To <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <UserPickerDropdown
                     value={fuAssigneeId}
-                    onChange={(e) => {
-                      setFuAssigneeId(e.target.value);
+                    onChange={(id) => {
+                      setFuAssigneeId(id);
                       setErrors((p) => ({ ...p, fuAssignee: "" }));
                     }}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm text-[#0F172A] focus:outline-none focus:ring-2 ${errors.fuAssignee ? "border-red-400 focus:ring-red-200" : "border-[#E2E8F0] focus:border-[#0b6cbf] focus:ring-[#0b6cbf]/20"}`}
-                  >
-                    {candidates.length === 0 && (
-                      <option value="">No assignees available</option>
-                    )}
-                    {candidates.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name ?? u.email}
-                      </option>
-                    ))}
-                  </select>
+                    users={candidates}
+                    placeholder={
+                      candidates.length === 0
+                        ? "No assignees available"
+                        : "Select a user…"
+                    }
+                  />
                   {errors.fuAssignee && (
                     <p className="text-xs text-red-500">{errors.fuAssignee}</p>
                   )}
@@ -1295,6 +1298,20 @@ function LeadViewModal({
                 Assigned To
               </span>
               <AssigneeBadge name={assigneeName} />
+              {assigneeName && (
+                <div className="flex flex-col gap-0 pl-0.5">
+                  {currentAssignment?.assignee_email && (
+                    <span className="text-[11px] text-[#94A3B8]">
+                      {currentAssignment.assignee_email}
+                    </span>
+                  )}
+                  {currentAssignment?.assignee_role && (
+                    <span className="text-[11px] text-[#94A3B8]">
+                      {currentAssignment.assignee_role}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             {lead.outcomeLabel && (
               <div className="flex flex-col gap-1">

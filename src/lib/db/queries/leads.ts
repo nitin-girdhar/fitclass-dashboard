@@ -120,7 +120,7 @@ export async function getLeadById(
              ls.name   AS stage_name,
              lso.name  AS outcome_name,
              ac.name   AS campaign_name,
-             mp.name   AS platform_name,
+             mp.label  AS platform_name,
              u.full_name AS assigned_rep_name,
              ci.name   AS city_name,
              st.name   AS state_name,
