@@ -61,7 +61,5 @@ export const changePasswordSchema = z
     path: ['new_password'],
   });
 
-export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
-export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
 export type AdminSetPasswordInput = z.infer<typeof adminSetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
