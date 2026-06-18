@@ -18,6 +18,15 @@ export type UserRole = (typeof ROLES)[number];
  * Intentionally minimal — no password hash, no internal columns ever leak
  * into this shape.
  */
+/** One org entry returned during multi-org login selection. */
+export interface OrgAccess {
+  orgId: string;
+  orgName: string;
+  role: UserRole;
+  rank: number;
+  roleLabel: string;
+}
+
 export interface SessionUser {
   id: string;
   email: string;
@@ -29,6 +38,8 @@ export interface SessionUser {
    */
   rank: number;
   orgId: string;
+  /** Tenant the current org belongs to. */
+  tenantId?: string | null;
   /** Human-readable org name from organizations.name. */
   orgName?: string | null;
   /** Human-readable tenant name from tenants.name. */
@@ -79,8 +90,10 @@ export interface JwtPayload {
   role: UserRole;
   /** Privilege rank from user_roles.rank — baked in at login time. */
   rank: number;
-  /** Organisation the user belongs to. */
+  /** Currently selected organisation. */
   orgId: string;
+  /** Tenant the selected org belongs to — used for tenant_admin scope resolution. */
+  tenantId?: string;
   /**
    * Password watermark — epoch SECONDS of `users.password_changed_at` at sign
    * time. The session resolver rejects the token if the row's current

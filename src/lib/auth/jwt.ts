@@ -38,7 +38,9 @@ import {
 import type { JwtPayload, JwtVerifyResult, UserRole } from '@/src/types/auth';
 
 /** Claims we control when minting a token (registered claims are added by lib). */
-type SignableClaims = Pick<JwtPayload, 'sub' | 'email' | 'role' | 'rank' | 'orgId' | 'pwd_iat'>;
+type SignableClaims = Pick<JwtPayload, 'sub' | 'email' | 'role' | 'rank' | 'orgId' | 'pwd_iat'> & {
+  tenantId?: string;
+};
 
 const ALGORITHM = 'HS256' as const;
 
@@ -65,11 +67,15 @@ function isUserRole(value: unknown): value is UserRole {
  */
 export function signJwt(claims: SignableClaims): string {
   const { JWT_SECRET } = getServerEnv();
-  return jwt.sign(
-    { email: claims.email, role: claims.role, rank: claims.rank, orgId: claims.orgId, pwd_iat: claims.pwd_iat },
-    JWT_SECRET,
-    { ...baseSignOptions, subject: claims.sub },
-  );
+  const payload: Record<string, unknown> = {
+    email: claims.email,
+    role: claims.role,
+    rank: claims.rank,
+    orgId: claims.orgId,
+    pwd_iat: claims.pwd_iat,
+  };
+  if (claims.tenantId) payload.tenantId = claims.tenantId;
+  return jwt.sign(payload, JWT_SECRET, { ...baseSignOptions, subject: claims.sub });
 }
 
 /**
@@ -92,6 +98,7 @@ export function verifyJwt(token: string): JwtVerifyResult {
       role?: unknown;
       rank?: unknown;
       orgId?: unknown;
+      tenantId?: unknown;
       pwd_iat?: unknown;
     };
 
@@ -104,6 +111,7 @@ export function verifyJwt(token: string): JwtVerifyResult {
     // against the backfilled password_changed_at, forcing one clean re-login.
     const pwdIat = typeof d.pwd_iat === 'number' ? d.pwd_iat : 0;
     const orgId = typeof d.orgId === 'string' ? d.orgId : '';
+    const tenantId = typeof d.tenantId === 'string' ? d.tenantId : undefined;
     // Legacy tokens (minted before rank existed) default to 0 so existing
     // sessions continue to work; a fresh login will embed the correct rank.
     const rank = typeof d.rank === 'number' ? d.rank : 0;
@@ -116,6 +124,7 @@ export function verifyJwt(token: string): JwtVerifyResult {
         role: d.role,
         rank,
         orgId,
+        tenantId,
         pwd_iat: pwdIat,
         iat: d.iat,
         exp: d.exp,

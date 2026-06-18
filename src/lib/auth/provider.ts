@@ -8,8 +8,10 @@ import {
   getUserByEmail as getDbUserByEmail,
   getUserById as getDbUserById,
   updateLastLogin as dbUpdateLastLogin,
+  getUserOrgAccess as getDbUserOrgAccess,
 } from "./db-user";
 import type { DbUser } from "./db-user";
+import type { OrgAccess } from "@/src/types/auth";
 
 export async function getUserByEmailFromProvider(
   email: string,
@@ -27,4 +29,10 @@ export async function updateLastLoginFromProvider(
   orgId: string,
 ): Promise<void> {
   return dbUpdateLastLogin(userId, orgId);
+}
+
+export async function getUserOrgAccessFromProvider(
+  userId: string,
+): Promise<OrgAccess[]> {
+  return getDbUserOrgAccess(userId);
 }

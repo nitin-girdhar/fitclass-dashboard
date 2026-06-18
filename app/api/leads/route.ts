@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { withRoute } from "@/src/lib/api/route-handler";
 import * as leadsQueries from "@/src/lib/db/queries/leads";
 import { withServiceTx } from "@/src/lib/db/transaction";
+import { resolveActorOrgIds } from "@/src/lib/permissions/scope";
+import { RANKS } from "@/src/lib/permissions/ranks";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -117,8 +119,10 @@ export const GET = withRoute(async (req: NextRequest, session) => {
   const platforms = rawPlatforms ? rawPlatforms.split(",").filter(Boolean) : undefined;
 
   const rawOrgIds = searchParams.get("orgIds");
-  let orgIds: string[] | undefined;
+  // undefined = not yet resolved; null = super_admin (no filter); string[] = scoped
+  let orgIds: string[] | null | undefined;
   if (rawOrgIds) {
+    // Caller supplied explicit org filter — validate each id is within their tenant.
     const requested = rawOrgIds.split(",").filter(Boolean);
     if (requested.length > 0) {
       const allowed: { id: string }[] = await withServiceTx(async (tx) =>
@@ -133,6 +137,10 @@ export const GET = withRoute(async (req: NextRequest, session) => {
       const allowedSet = new Set(allowed.map((r) => r.id));
       orgIds = requested.filter((id) => allowedSet.has(id));
     }
+  } else if (session.rank >= RANKS.TENANT_ADMIN) {
+    // tenant_admin → string[] scoped to their tenant's orgs
+    // super_admin  → null (resolveActorOrgIds returns null = no org restriction)
+    orgIds = await resolveActorOrgIds(session);
   }
 
   const result = await leadsQueries.getLeads(session.orgId, session.id, {

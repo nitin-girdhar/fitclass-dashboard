@@ -32,15 +32,15 @@
     Password to set on all seeded demo users. Default: Admin@12345
 
 .EXAMPLE
-    .\deploy-supabase.ps1 -Password ""
-    .\deploy-supabase.ps1 -Database "crm" -DbHost "" -Port "5432" -User "postgres" -Password "" -SeedPassword "Admin@12345"
+    .\deploy-supabase.ps1
+    .\deploy-supabase.ps1 -DbHost "db.xxxx.supabase.co" -Password "mypassword"
 #>
 param(
     [string]$Database     = "postgres",
     [string]$DbHost       = "",
     [string]$Port         = "5432",
     [string]$User         = "postgres",
-    [Parameter(Mandatory)][string]$Password,
+    [string]$Password     = "",
     [string]$SeedPassword = "Admin@12345"
 )
 
@@ -48,6 +48,17 @@ $ErrorActionPreference = 'Stop'
 
 function Write-Step { param([string]$Msg) Write-Host "`n==> $Msg" -ForegroundColor Cyan }
 function Write-OK   { param([string]$Msg) Write-Host "    OK  $Msg" -ForegroundColor Green }
+
+# ===========================================================================
+# Prompt for missing connection details
+# ===========================================================================
+if (-not $DbHost) {
+    $DbHost = Read-Host "  Supabase host (e.g. db.xxxxxxxxxxxx.supabase.co)"
+}
+if (-not $Password) {
+    $securePw = Read-Host "  Supabase database password" -AsSecureString
+    $Password = [Net.NetworkCredential]::new('', $securePw).Password
+}
 
 # ===========================================================================
 # Resolve psql: prefer local install, fall back to Docker image as client
@@ -64,14 +75,15 @@ if (Get-Command psql -ErrorAction SilentlyContinue) {
         Select-Object -First 1 -ExpandProperty IPAddressToString
     if (-not $ipv4) {
         Write-Host ""
-        Write-Host "  ERROR: '$DbHost' has no IPv4 address (IPv6-only)." -ForegroundColor Red
-        Write-Host "  Docker on Windows cannot route IPv6 to the internet." -ForegroundColor Red
+        Write-Host "  ERROR: '$DbHost' resolves to IPv6 only." -ForegroundColor Red
+        Write-Host "  Docker on Windows cannot route IPv6 traffic to the internet." -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Fix: install the PostgreSQL client tools (psql) locally:" -ForegroundColor Yellow
-        Write-Host "    winget install -e --id PostgreSQL.PostgreSQL" -ForegroundColor Yellow
-        Write-Host "  Then re-run this script. psql will be used directly, bypassing Docker." -ForegroundColor Yellow
+        Write-Host "  Fix: install psql locally (run in an admin terminal), then restart" -ForegroundColor Yellow
+        Write-Host "  this terminal and re-run the script:" -ForegroundColor Yellow
         Write-Host ""
-        Write-Error "Cannot reach Supabase via Docker - IPv6-only host. Install psql locally and retry."
+        Write-Host "    winget install -e --id PostgreSQL.PostgreSQL.17" -ForegroundColor White
+        Write-Host ""
+        Write-Error "IPv6-only host - psql required. See instructions above."
     }
     $DbHost = $ipv4
     Write-Host "    psql not on PATH - using Docker (postgres:17), resolved host to $DbHost" -ForegroundColor DarkGray
@@ -111,7 +123,7 @@ Write-OK "Dependencies installed"
 # ===========================================================================
 Write-Step "Step 2 - Deploy schema (databse-model/*.sql)"
 
-$scriptDir = Join-Path $PSScriptRoot "databse-model"
+$scriptDir = $PSScriptRoot
 
 # On Supabase the target database already exists; skip CREATE DATABASE.
 # Attempting it would fail (insufficient privilege) - just confirm connectivity.
@@ -131,6 +143,8 @@ $i = 0
 foreach ($script in $scripts) {
     $i++
     Write-Host "    [$i/$total] $($script.Name) ..."
+    # Supabase recent projects do not default search_path to public.
+    # Prepend SET so all unqualified table names resolve correctly.
     if ($useDockerPsql) {
         # Mount the script dir so psql inside Docker can read the file
         $containerPath = "/scripts/$($script.Name)"
@@ -138,9 +152,15 @@ foreach ($script in $scripts) {
             -e "PGPASSWORD=$Password" `
             -v "$($scriptDir):/scripts:ro" `
             postgres:17 `
-            psql -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -f $containerPath
+            psql -h $DbHost -p $Port -U $User -d $Database `
+                -c "SET search_path TO public, pg_catalog" `
+                -v ON_ERROR_STOP=1 -f $containerPath
     } else {
-        Invoke-Psql -Db $Database -ExtraArgs @("-v", "ON_ERROR_STOP=1", "-f", $script.FullName)
+        Invoke-Psql -Db $Database -ExtraArgs @(
+            "-c", "SET search_path TO public, pg_catalog",
+            "-v", "ON_ERROR_STOP=1",
+            "-f", $script.FullName
+        )
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed at $($script.Name). Deployment halted."
@@ -154,7 +174,7 @@ Write-OK "All $total scripts applied"
 Write-Step "Step 3 - Service role passwords (devpass)"
 
 $serviceRolesSql = @"
-ALTER ROLE service_role    WITH PASSWORD 'devpass';
+ALTER ROLE crm_service     WITH PASSWORD 'devpass';
 ALTER ROLE lead_svc        WITH PASSWORD 'devpass';
 ALTER ROLE campaign_svc    WITH PASSWORD 'devpass';
 ALTER ROLE user_mgmt_svc   WITH PASSWORD 'devpass';
@@ -165,7 +185,7 @@ ALTER ROLE analytics_svc   WITH PASSWORD 'devpass';
 "@
 
 Invoke-PsqlStdin -Db $Database -Sql $serviceRolesSql | Out-Null
-Write-OK "service_role, lead_svc, campaign_svc, user_mgmt_svc, notif_svc, intake_svc, tenant_dash_svc, analytics_svc"
+Write-OK "crm_service, lead_svc, campaign_svc, user_mgmt_svc, notif_svc, intake_svc, tenant_dash_svc, analytics_svc"
 
 # ===========================================================================
 # Step 4 - Seed user passwords
@@ -178,14 +198,7 @@ if (-not $hash -or $hash.Length -lt 55) {
 }
 Write-OK "bcrypt hash generated"
 
-$updateSql = "UPDATE users SET password_hash = '$hash', password_changed_at = CLOCK_TIMESTAMP() " +
-             "WHERE email IN (" +
-             "'vikram.malhotra@apexcp.in'," +
-             "'priya.kapoor@apexcp.in'," +
-             "'rahul.singh@apexcp.in'," +
-             "'ananya.verma@apexskt.in'," +
-             "'rajan.mehta@velvetkm.in'," +
-             "'deepa.nair@velvetln.in');"
+$updateSql = "SET search_path TO public, pg_catalog; UPDATE users SET password_hash = '$hash', password_changed_at = CLOCK_TIMESTAMP() WHERE NOT is_deleted;"
 
 Invoke-PsqlStdin -Db $Database -Sql $updateSql
 Write-OK "Seed user passwords set"

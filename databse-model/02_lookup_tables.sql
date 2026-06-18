@@ -1,4 +1,5 @@
 BEGIN;
+SET search_path TO public, pg_catalog;
 
 -- ============================================================
 -- LOOKUP / DICTIONARY TABLES
@@ -189,7 +190,9 @@ INSERT INTO marketing_platforms (name, label, display_order) VALUES
     ('staff_referral', 'Staff Referral', 6),
     ('linkedin',       'LinkedIn',       7),
     ('whatsapp',       'WhatsApp',       8),
-    ('tiktok',         'TikTok',         9)
+    ('tiktok',         'TikTok',         9),
+    ('instagram',      'Instagram',      10),
+    ('google',         'Google',         11)
 ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label, display_order = EXCLUDED.display_order;
 
 INSERT INTO campaign_statuses (name, description) VALUES

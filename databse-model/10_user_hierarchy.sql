@@ -163,7 +163,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_assignment_log_assigned_to
 
 -- Non-partial index for FK CASCADE DELETE from marketing_leads.
 -- The composite indexes above lead with org_id, so the FK engine cannot use them
--- when scanning by lead_id alone during a physical purge by service_role.
+-- when scanning by lead_id alone during a physical purge by crm_service.
 CREATE INDEX IF NOT EXISTS idx_lead_assignment_log_lead_id_full
     ON lead_assignment_log (lead_id);
 
@@ -272,17 +272,19 @@ BEGIN
         RETURN TRUE;
     END IF;
 
-    -- Resolve acting user's role within the org
+    -- Resolve acting user's role within the org from user_org_access
     SELECT ur.name INTO v_role
-    FROM users u
-    JOIN user_roles ur ON ur.id = u.role_id
-    WHERE u.id = p_acting_user_id
-      AND u.org_id = p_org_id
+    FROM user_org_access uoa
+    JOIN user_roles ur ON ur.id = uoa.role_id
+    JOIN users u ON u.id = uoa.user_id
+    WHERE uoa.user_id = p_acting_user_id
+      AND uoa.org_id  = p_org_id
+      AND uoa.is_active
       AND NOT u.is_deleted
       AND u.is_active;
 
     IF v_role IS NULL THEN
-        RETURN FALSE; -- acting user not found or inactive in this org
+        RETURN FALSE; -- acting user not found or has no active access to this org
     END IF;
 
     -- Unrestricted roles: can assign to anyone in the org
@@ -496,8 +498,8 @@ GRANT SELECT ON vw_user_team_members        TO tenant_admin;
 GRANT SELECT ON vw_lead_assignment_timeline TO tenant_admin;
 GRANT EXECUTE ON FUNCTION can_assign_to(UUID, UUID, UUID) TO tenant_admin;
 
-GRANT ALL ON lead_assignment_log            TO service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON lead_assignment_log            TO crm_service;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO crm_service;
 
 -- manager_id seed data (manager relationships) are set in 09_seed_data.sql.
 

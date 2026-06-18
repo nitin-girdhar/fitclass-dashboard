@@ -23,32 +23,38 @@ export async function getLeads(
     platforms?: string[];
     page?: number;
     pageSize?: number;
-    orgIds?: string[];
+    /** undefined = single-org (RLS); null = all orgs no filter (super_admin); string[] = scoped */
+    orgIds?: string[] | null;
     actorRank?: number;
   } = {},
 ) {
   const page = filters.page ?? 1;
-  const pageSize = Math.min(filters.pageSize ?? 50, 500);
+  const pageSize = Math.min(filters.pageSize ?? 50, 1000);
   const offset = (page - 1) * pageSize;
 
-  const useMultiOrg = filters.orgIds && filters.orgIds.length > 0;
+  // useServiceRole: true when we bypass RLS (tenant_admin scoped list, or super_admin unscoped)
+  // undefined = single-org RLS path; null = all orgs; [] = no orgs; [...] = specific orgs
+  const useServiceRole = filters.orgIds !== undefined;
+  const hasOrgFilter = Array.isArray(filters.orgIds) && filters.orgIds.length > 0;
 
   const buildQuery = async (tx: any) => {
     const conditions: string[] = [];
     const params: unknown[] = [];
 
-    if (useMultiOrg) {
-      // Service role — must filter deleted rows explicitly
+    if (useServiceRole) {
+      // Service role — must filter deleted rows explicitly (RLS won't do it)
       conditions.push("NOT is_deleted");
-      params.push(filters.orgIds);
-      conditions.push(`org_id = ANY($${params.length}::uuid[])`);
+      if (hasOrgFilter) {
+        params.push(filters.orgIds);
+        conditions.push(`org_id = ANY($${params.length}::uuid[])`);
+      }
+      // orgIds = null (super_admin): no org restriction — sees all tenants
     }
-    // Single-org: is_deleted filtered by RLS; org scoped by withOrgTx context
+    // Single-org: is_deleted and org scope handled by withOrgTx RLS
 
-    // Sales tier (rank < 2): own leads + unassigned only.
-    // Admins/managers/SSE see everything in the org (no extra filter needed).
+    // Sales tier: own leads + unassigned only.
     if (
-      !useMultiOrg &&
+      !useServiceRole &&
       filters.actorRank !== undefined &&
       filters.actorRank < RANKS.SSE
     ) {
@@ -100,7 +106,7 @@ export async function getLeads(
     return { leads: rows, total, stageOptions, stageOutcomes, page, pageSize };
   };
 
-  if (useMultiOrg) {
+  if (useServiceRole) {
     return withServiceTx(buildQuery);
   }
   return withOrgTx(orgId, userId, buildQuery);

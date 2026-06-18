@@ -1,4 +1,5 @@
 BEGIN;
+SET search_path TO public, pg_catalog;
 
 -- ============================================================
 -- UTILITY FUNCTIONS
@@ -17,14 +18,14 @@ END;
 $$;
 
 -- Converts a physical DELETE into a soft delete (UPDATE is_deleted=TRUE).
--- Physical DELETE is only possible for service_role (GDPR erasure / data purge).
+-- Physical DELETE is only possible for crm_service (GDPR erasure / data purge).
 -- The resulting UPDATE fires set_updated_at() and the audit trigger automatically.
 CREATE OR REPLACE FUNCTION soft_delete_row()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     v_user_id UUID;
 BEGIN
-    IF current_user = 'service_role' THEN
+    IF current_user = 'crm_service' THEN
         RETURN OLD;
     END IF;
 
@@ -478,11 +479,11 @@ BEGIN
         END IF;
     END IF;
     IF NEW.assigned_user_id IS NOT NULL THEN
-        PERFORM 1 FROM users
-        WHERE id = NEW.assigned_user_id AND org_id = NEW.org_id AND NOT is_deleted;
+        PERFORM 1 FROM user_org_access
+        WHERE user_id = NEW.assigned_user_id AND org_id = NEW.org_id AND is_active;
         IF NOT FOUND THEN
             RAISE EXCEPTION
-                'assigned_user_id % does not belong to org % or has been deleted.',
+                'assigned_user_id % does not have active access to org % or does not exist.',
                 NEW.assigned_user_id, NEW.org_id;
         END IF;
     END IF;
@@ -505,11 +506,11 @@ BEGIN
         RAISE EXCEPTION
             'lead_id % does not belong to org % or has been deleted.', NEW.lead_id, NEW.org_id;
     END IF;
-    PERFORM 1 FROM users
-    WHERE id = NEW.user_id AND org_id = NEW.org_id AND NOT is_deleted;
+    PERFORM 1 FROM user_org_access
+    WHERE user_id = NEW.user_id AND org_id = NEW.org_id AND is_active;
     IF NOT FOUND THEN
         RAISE EXCEPTION
-            'user_id % does not belong to org % or has been deleted.', NEW.user_id, NEW.org_id;
+            'user_id % does not have active access to org % or does not exist.', NEW.user_id, NEW.org_id;
     END IF;
     RETURN NEW;
 END;
@@ -530,11 +531,11 @@ BEGIN
         RAISE EXCEPTION
             'lead_id % does not belong to org % or has been deleted.', NEW.lead_id, NEW.org_id;
     END IF;
-    PERFORM 1 FROM users
-    WHERE id = NEW.assigned_user_id AND org_id = NEW.org_id AND NOT is_deleted;
+    PERFORM 1 FROM user_org_access
+    WHERE user_id = NEW.assigned_user_id AND org_id = NEW.org_id AND is_active;
     IF NOT FOUND THEN
         RAISE EXCEPTION
-            'assigned_user_id % does not belong to org % or has been deleted.',
+            'assigned_user_id % does not have active access to org % or does not exist.',
             NEW.assigned_user_id, NEW.org_id;
     END IF;
     RETURN NEW;

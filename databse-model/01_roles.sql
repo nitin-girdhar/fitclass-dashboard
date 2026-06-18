@@ -15,7 +15,7 @@
   ├──────────────┼───────────────────────────────────────────────────────────────┤
   │ app_user     │ NOLOGIN group role — holds all table grants for CRM services. │
   │ tenant_admin │ NOLOGIN group role — holds grants for cross-org reporting.    │
-  │ service_role │ Backend admin: migrations, seeds. BYPASSRLS + LOGIN.          │
+  │ crm_service  │ Backend admin: migrations, seeds. BYPASSRLS + LOGIN.          │
   └──────────────┴───────────────────────────────────────────────────────────────┘
 
   All three blocks are idempotent — safe to re-run on existing databases.
@@ -43,10 +43,10 @@ $$;
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
-        CREATE ROLE service_role WITH LOGIN PASSWORD 'replace_in_env' BYPASSRLS;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'crm_service') THEN
+        CREATE ROLE crm_service WITH LOGIN PASSWORD 'replace_in_env' BYPASSRLS;
     ELSE
-        ALTER ROLE service_role WITH LOGIN BYPASSRLS;
+        ALTER ROLE crm_service WITH LOGIN BYPASSRLS;
     END IF;
 END;
 $$;

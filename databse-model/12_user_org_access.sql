@@ -1,0 +1,2 @@
+-- Moved to 03b_user_org_access.sql so it runs before 04_rls_policies.sql.
+-- This file is kept as a no-op placeholder to avoid gaps in the numbering.

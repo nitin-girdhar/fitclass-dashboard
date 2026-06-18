@@ -1,5 +1,6 @@
 import { User } from "@/src/types/db";
 import { withServiceTx } from "../db/transaction";
+import type { OrgAccess, UserRole } from "@/src/types/auth";
 
 export interface DbUser extends User {}
 
@@ -25,6 +26,7 @@ const USER_SELECT = `
   u.created_at              AS "createdAt",
   u.updated_at              AS "updatedAt",
   o.name                    AS "orgName",
+  o.tenant_id               AS "tenantId",
   t.name                    AS "tenantName"
 `;
 
@@ -83,6 +85,32 @@ export async function getUserById(id: string): Promise<DbUser | null> {
       [id],
     );
     return rows[0] ?? null;
+  });
+}
+
+/**
+ * Return all active org access rows for a user — used during login
+ * to build the org picker when a user belongs to multiple orgs.
+ */
+export async function getUserOrgAccess(userId: string): Promise<OrgAccess[]> {
+  return withServiceTx(async (tx) => {
+    const rows = await tx.unsafe(
+      `SELECT
+         uoa.org_id        AS "orgId",
+         o.name            AS "orgName",
+         ur.name           AS "role",
+         ur.rank           AS "rank",
+         ur.label          AS "roleLabel"
+       FROM user_org_access uoa
+       JOIN organizations o  ON o.id    = uoa.org_id
+       JOIN user_roles    ur ON ur.id   = uoa.role_id
+       WHERE uoa.user_id  = $1
+         AND uoa.is_active = true
+         AND NOT o.is_deleted
+       ORDER BY o.name`,
+      [userId],
+    );
+    return rows as OrgAccess[];
   });
 }
 

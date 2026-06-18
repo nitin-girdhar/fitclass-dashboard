@@ -37,6 +37,7 @@ import StatsCards from '@/components/StatsCards';
 import LeadsTable from '@/components/LeadsTable';
 import DownloadButton from '@/components/common/DownloadButton';
 import type { SessionUser } from '@/src/types/auth';
+import { RANKS } from '@/src/lib/permissions/ranks';
 import { applyLeadFilter } from '@/src/lib/leads/filter';
 import { buildLeadExportColumns } from '@/src/lib/export/lead-columns';
 import { buildFilename, exportRows, type ExportFormat } from '@/src/lib/export/export';
@@ -131,11 +132,12 @@ export default function LeadDashboardShell({ actor }: Props) {
 
   // ── Leads ─────────────────────────────────────────────────────────────────
   const {
-    leads, stats, loading, error,
+    leads, total, stats, loading, error,
     headers, statusOptions, statusLabelMap, requiresFollowupStatuses,
     rejectionStatuses, failReasons: stageOutcomes, stageNameToId,
     assignments, refetch,
     updateLead,
+    page, pageSize, setPage, setPageSize,
   } = useLeads(orgIds, platforms);
 
   // ── Inline-assignment candidate cache ────────────────────────────────────
@@ -188,9 +190,13 @@ export default function LeadDashboardShell({ actor }: Props) {
 
   const exportableCount = applyLeadFilter(leads, activeFilter, requiresFollowupStatuses).length;
 
-  // Display label for the toolbar
+  // For tenant_admin / super_admin with no branch filter: show "All Branches".
+  // For everyone else: show their single org name (or first branch if available).
+  const isMultiOrgView = actor.rank >= RANKS.TENANT_ADMIN;
   const branchLabel = selectedBranches.length === 0
-    ? (primaryBranch?.name ?? '—')
+    ? isMultiOrgView
+      ? 'All Branches'
+      : (primaryBranch?.name ?? '—')
     : selectedBranches.length === 1
       ? selectedBranches[0].name
       : `${selectedBranches.length} branches`;
@@ -248,7 +254,7 @@ export default function LeadDashboardShell({ actor }: Props) {
           </span>
           {!loading && (
             <span className="shrink-0 rounded-full border border-[#E2E8F0] bg-[#F1F5F9] px-2 py-0.5 text-xs font-medium tabular-nums text-[#64748B]">
-              {leads.length} total
+              {total} total
             </span>
           )}
           {activeFilter !== 'all' && (
@@ -309,6 +315,40 @@ export default function LeadDashboardShell({ actor }: Props) {
             stageOutcomes={stageOutcomes}
             stageNameToId={stageNameToId}
           />
+
+          {/* ── Pagination bar ───────────────────────────────────────────── */}
+          {!loading && total > 0 && (() => {
+            const totalPages = Math.ceil(total / pageSize);
+            const from = (page - 1) * pageSize + 1;
+            const to   = Math.min(page * pageSize, total);
+            return (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#E2E8F0] px-4 py-2 text-xs text-[#64748B]">
+                {/* Page size */}
+                <div className="flex items-center gap-1.5">
+                  <span>Page Size:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="rounded border border-[#E2E8F0] bg-white px-1.5 py-0.5 text-xs text-[#0F172A] focus:outline-none"
+                  >
+                    {[25, 50, 100].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Range */}
+                <span className="tabular-nums">{from} to {to} of {total}</span>
+                {/* Navigation */}
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => setPage(1)}          disabled={page === 1}          className="rounded px-1.5 py-0.5 disabled:opacity-30 hover:bg-[#F1F5F9]">{'|<'}</button>
+                  <button onClick={() => setPage(page - 1)}   disabled={page === 1}          className="rounded px-1.5 py-0.5 disabled:opacity-30 hover:bg-[#F1F5F9]">{'<'}</button>
+                  <span className="px-2 tabular-nums">Page {page} of {totalPages}</span>
+                  <button onClick={() => setPage(page + 1)}   disabled={page >= totalPages}  className="rounded px-1.5 py-0.5 disabled:opacity-30 hover:bg-[#F1F5F9]">{'>'}</button>
+                  <button onClick={() => setPage(totalPages)} disabled={page >= totalPages}  className="rounded px-1.5 py-0.5 disabled:opacity-30 hover:bg-[#F1F5F9]">{'>|'}</button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

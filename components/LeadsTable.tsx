@@ -410,7 +410,7 @@ function buildDynamicColumns(
           cellRenderer: (p: { value: string }) => (
             <StatusBadge value={p.value ?? ""} labelMap={statusLabelMap} />
           ),
-          cellStyle: { display: "flex", alignItems: "center" } as Record<
+          cellStyle: { display: "flex", alignItems: "center", overflow: "hidden" } as Record<
             string,
             string
           >,
@@ -418,19 +418,29 @@ function buildDynamicColumns(
       case "Outcome":
         return {
           ...base,
-          width: 180,
+          flex: 1,
+          minWidth: 160,
+          width: undefined,
           cellRenderer: (p: { value: string }) =>
             p.value ? (
               <span
-                style={{ background: "#F1F5F9", color: "#475569" }}
+                style={{
+                  background: "#F1F5F9",
+                  color: "#475569",
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
                 className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                title={p.value}
               >
                 {p.value}
               </span>
             ) : (
               <span className="text-xs text-[#CBD5E1]">—</span>
             ),
-          cellStyle: { display: "flex", alignItems: "center" } as Record<
+          cellStyle: { display: "flex", alignItems: "center", overflow: "hidden" } as Record<
             string,
             string
           >,
@@ -1616,6 +1626,15 @@ export default function LeadsTable({
         gap: "6px",
       },
     };
+    const phoneIdx = dynamic.findIndex((c) => c.headerName === "Phone Number");
+    if (phoneIdx >= 0) {
+      return [
+        ...dynamic.slice(0, phoneIdx + 1),
+        assignee,
+        ...dynamic.slice(phoneIdx + 1),
+        actionsCol,
+      ];
+    }
     return [...dynamic, assignee, actionsCol];
   }, [headers, statusLabelMap, assigneeCellRenderer, actionsCellRenderer]);
 
@@ -1808,9 +1827,6 @@ export default function LeadsTable({
           defaultColDef={defaultColDef}
           context={gridContext}
           onGridReady={onGridReady}
-          pagination
-          paginationPageSize={25}
-          paginationPageSizeSelector={[25, 50, 100]}
           rowHeight={48}
           headerHeight={44}
           animateRows={false}

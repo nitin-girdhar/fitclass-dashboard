@@ -18,7 +18,7 @@ BEGIN;
   │              │ Per-service login roles call SET LOCAL ROLE tenant_admin.    │
   │              │ Per-service login credentials → 11_service_logins.sql       │
   ├──────────────┼───────────────────────────────────────────────────────────────┤
-  │ service_role │ Backend admin: migrations, seed scripts, tenant onboarding.   │
+  │ crm_service  │ Backend admin: migrations, seed scripts, tenant onboarding.   │
   │              │ BYPASSRLS + LOGIN — never exposed to any API layer.           │
   └──────────────┴───────────────────────────────────────────────────────────────┘
 
@@ -41,7 +41,7 @@ BEGIN;
       ALTER ROLE notif_svc       WITH PASSWORD :'NOTIF_SVC_PWD';
       ALTER ROLE intake_svc      WITH PASSWORD :'INTAKE_SVC_PWD';
       ALTER ROLE tenant_dash_svc WITH PASSWORD :'TENANT_DASH_PWD';
-      ALTER ROLE service_role    WITH PASSWORD :'SERVICE_ROLE_PWD';
+      ALTER ROLE crm_service     WITH PASSWORD :'CRM_SERVICE_PWD';
 
   TRANSACTION PATTERN FOR EVERY APP-TIER REQUEST
   ════════════════════════════════════════════════
@@ -89,15 +89,15 @@ END;
 $$;
 
 -- ============================================================
--- ROLE: service_role  (LOGIN + BYPASSRLS)
+-- ROLE: crm_service  (LOGIN + BYPASSRLS)
 -- Password NOT reset on re-run to avoid overwriting rotated credentials.
 -- ============================================================
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
-        CREATE ROLE service_role WITH LOGIN PASSWORD 'replace_in_env' BYPASSRLS;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'crm_service') THEN
+        CREATE ROLE crm_service WITH LOGIN PASSWORD 'replace_in_env' BYPASSRLS;
     ELSE
-        ALTER ROLE service_role WITH LOGIN BYPASSRLS;
+        ALTER ROLE crm_service WITH LOGIN BYPASSRLS;
     END IF;
 END;
 $$;
@@ -109,13 +109,13 @@ $$;
 -- ============================================================
 DO $$
 BEGIN
-    EXECUTE format('GRANT CONNECT ON DATABASE %I TO service_role', current_database());
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO crm_service', current_database());
 END;
 $$;
 
 GRANT USAGE ON SCHEMA public TO app_user;
 GRANT USAGE ON SCHEMA public TO tenant_admin;
-GRANT USAGE ON SCHEMA public TO service_role;
+GRANT USAGE ON SCHEMA public TO crm_service;
 
 -- ============================================================
 -- GRANTS: app_user
@@ -206,16 +206,16 @@ GRANT SELECT ON TABLE
 TO tenant_admin;
 
 -- ============================================================
--- GRANTS: service_role
+-- GRANTS: crm_service
 -- ============================================================
-GRANT ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public TO service_role;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public TO crm_service;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO crm_service;
 
 -- Future tables and sequences created by migrations inherit these grants automatically
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT ALL PRIVILEGES ON TABLES    TO service_role;
+    GRANT ALL PRIVILEGES ON TABLES    TO crm_service;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT ALL PRIVILEGES ON SEQUENCES TO service_role;
+    GRANT ALL PRIVILEGES ON SEQUENCES TO crm_service;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT ON TABLES TO app_user;

@@ -1,4 +1,5 @@
 BEGIN;
+SET search_path TO public, pg_catalog;
 
 /*
   ══════════════════════════════════════════════════════════════
@@ -8,13 +9,13 @@ BEGIN;
   ┌──────────────┬──────────────────────────────┬────────────────────────────────┐
   │ Role         │ Session vars required         │ Data scope                     │
   ├──────────────┼──────────────────────────────┼────────────────────────────────┤
-  │ app_user     │ app.current_org_id            │ Single org — enforced by RLS   │
-  │              │ app.current_user_id           │                                │
+  │ app_user     │ app.current_user_id           │ All orgs in user_org_access    │
+  │              │                               │ for this user — enforced by RLS│
   ├──────────────┼──────────────────────────────┼────────────────────────────────┤
   │ tenant_admin │ app.current_tenant_id         │ All orgs under one tenant      │
   │              │ app.current_user_id           │ enforced by RLS                │
   ├──────────────┼──────────────────────────────┼────────────────────────────────┤
-  │ service_role │ none (BYPASSRLS)              │ Entire database                │
+  │ crm_service  │ none (BYPASSRLS)              │ Entire database                │
   └──────────────┴──────────────────────────────┴────────────────────────────────┘
 
   CONNECTION POOL PATTERN (PgBouncer transaction mode):
@@ -76,16 +77,33 @@ ALTER TABLE users FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON users;
 DROP POLICY IF EXISTS tenant_isolation_policy ON users;
+DROP POLICY IF EXISTS crm_service_policy      ON users;
 
--- app_user: single-org scope + exclude soft-deleted rows
+-- crm_service: full access for auth lookups, migrations, and seed scripts.
+-- crm_service has BYPASSRLS but FORCE ROW LEVEL SECURITY overrides it for non-superusers,
+-- so an explicit policy is required.
+CREATE POLICY crm_service_policy ON users
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
+
+-- app_user: multi-org scope via user_org_access + exclude soft-deleted rows
 CREATE POLICY org_isolation_policy ON users
     AS PERMISSIVE FOR ALL TO app_user
     USING (
-        org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
         AND NOT is_deleted
     )
     WITH CHECK (
-        org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
         AND NOT is_deleted
     );
 
@@ -115,11 +133,31 @@ ALTER TABLE ad_campaigns FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON ad_campaigns;
 DROP POLICY IF EXISTS tenant_isolation_policy ON ad_campaigns;
+DROP POLICY IF EXISTS crm_service_policy      ON ad_campaigns;
+
+CREATE POLICY crm_service_policy ON ad_campaigns
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
 
 CREATE POLICY org_isolation_policy ON ad_campaigns
     AS PERMISSIVE FOR ALL TO app_user
-    USING     (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted)
-    WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted);
+    USING (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    )
+    WITH CHECK (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    );
 
 CREATE POLICY tenant_isolation_policy ON ad_campaigns
     AS PERMISSIVE FOR ALL TO tenant_admin
@@ -146,11 +184,31 @@ ALTER TABLE marketing_leads FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON marketing_leads;
 DROP POLICY IF EXISTS tenant_isolation_policy ON marketing_leads;
+DROP POLICY IF EXISTS crm_service_policy      ON marketing_leads;
+
+CREATE POLICY crm_service_policy ON marketing_leads
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
 
 CREATE POLICY org_isolation_policy ON marketing_leads
     AS PERMISSIVE FOR ALL TO app_user
-    USING     (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted)
-    WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted);
+    USING (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    )
+    WITH CHECK (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    );
 
 CREATE POLICY tenant_isolation_policy ON marketing_leads
     AS PERMISSIVE FOR ALL TO tenant_admin
@@ -177,11 +235,31 @@ ALTER TABLE lead_interactions FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON lead_interactions;
 DROP POLICY IF EXISTS tenant_isolation_policy ON lead_interactions;
+DROP POLICY IF EXISTS crm_service_policy      ON lead_interactions;
+
+CREATE POLICY crm_service_policy ON lead_interactions
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
 
 CREATE POLICY org_isolation_policy ON lead_interactions
     AS PERMISSIVE FOR ALL TO app_user
-    USING     (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted)
-    WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted);
+    USING (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    )
+    WITH CHECK (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    );
 
 CREATE POLICY tenant_isolation_policy ON lead_interactions
     AS PERMISSIVE FOR ALL TO tenant_admin
@@ -208,11 +286,31 @@ ALTER TABLE lead_follow_ups FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON lead_follow_ups;
 DROP POLICY IF EXISTS tenant_isolation_policy ON lead_follow_ups;
+DROP POLICY IF EXISTS crm_service_policy      ON lead_follow_ups;
+
+CREATE POLICY crm_service_policy ON lead_follow_ups
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
 
 CREATE POLICY org_isolation_policy ON lead_follow_ups
     AS PERMISSIVE FOR ALL TO app_user
-    USING     (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted)
-    WITH CHECK (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid AND NOT is_deleted);
+    USING (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    )
+    WITH CHECK (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+        AND NOT is_deleted
+    );
 
 CREATE POLICY tenant_isolation_policy ON lead_follow_ups
     AS PERMISSIVE FOR ALL TO tenant_admin
@@ -289,10 +387,22 @@ ALTER TABLE lead_status_log FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS org_isolation_policy    ON lead_status_log;
 DROP POLICY IF EXISTS tenant_isolation_policy ON lead_status_log;
+DROP POLICY IF EXISTS crm_service_policy      ON lead_status_log;
+
+CREATE POLICY crm_service_policy ON lead_status_log
+    AS PERMISSIVE FOR ALL TO crm_service
+    USING (true)
+    WITH CHECK (true);
 
 CREATE POLICY org_isolation_policy ON lead_status_log
     AS PERMISSIVE FOR SELECT TO app_user
-    USING (org_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid);
+    USING (
+        org_id IN (
+            SELECT org_id FROM user_org_access
+            WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+              AND is_active
+        )
+    );
 
 CREATE POLICY tenant_isolation_policy ON lead_status_log
     AS PERMISSIVE FOR SELECT TO tenant_admin

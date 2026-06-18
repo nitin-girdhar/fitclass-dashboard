@@ -97,6 +97,16 @@ export async function createUser(orgId: string, userId: string, data: any) {
          ${data.forcePasswordChange ?? true})
       RETURNING id
     `;
+
+    // Grant the new user access to their org — source of truth for RLS
+    await tx`
+      INSERT INTO user_org_access (user_id, org_id, role_id, granted_by)
+      VALUES (${result.id}, ${orgId}, ${roleId}, ${userId})
+      ON CONFLICT (user_id, org_id) DO UPDATE
+        SET role_id    = EXCLUDED.role_id,
+            updated_at = CLOCK_TIMESTAMP()
+    `;
+
     return result;
   });
 }
@@ -150,6 +160,18 @@ export async function updateUser(
       WHERE id = ${targetUserId} AND org_id = ${orgId} AND NOT is_deleted
       RETURNING id, password_changed_at
     `;
+
+    // Mirror role change to user_org_access for this org
+    if (roleChanging && updates.role_id !== undefined) {
+      await tx`
+        UPDATE user_org_access
+        SET role_id    = ${updates.role_id},
+            updated_at = CLOCK_TIMESTAMP()
+        WHERE user_id = ${targetUserId}
+          AND org_id  = ${orgId}
+      `;
+    }
+
     return result;
   });
 }

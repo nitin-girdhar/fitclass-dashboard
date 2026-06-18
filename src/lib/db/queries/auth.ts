@@ -1,6 +1,6 @@
 /**
  * Auth-specific DB queries.
- * These run under service_role (no RLS) because at login time the org
+ * These run under crm_service (no RLS) because at login time the org
  * context is not yet established.
  */
 import { withServiceTx } from "../transaction";

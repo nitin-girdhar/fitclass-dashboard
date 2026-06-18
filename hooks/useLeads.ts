@@ -21,6 +21,7 @@ export interface FailReason { id: number; name: string; label: string; stage_id:
 
 interface UseLeadsReturn {
   leads: Lead[];
+  total: number;
   stats: StatsData;
   loading: boolean;
   error: string | null;
@@ -34,10 +35,17 @@ interface UseLeadsReturn {
   assignments: Record<number, AssignmentView>;
   updateLead: (payload: UpdatePayload) => Promise<void>;
   refetch: () => Promise<void>;
+  page: number;
+  pageSize: number;
+  setPage: (p: number) => void;
+  setPageSize: (ps: number) => void;
 }
 
 export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: string): UseLeadsReturn {
   const [leads, setLeads]             = useState<Lead[]>([]);
+  const [total, setTotal]             = useState(0);
+  const [page, setPageState]          = useState(1);
+  const [pageSize, setPageSizeState]  = useState(25);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -53,9 +61,20 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
   const orgIdsRef      = useRef(orgIds);
   const platformsRef   = useRef(platforms);
   const assignedToRef  = useRef(assignedTo);
+  const pageRef        = useRef(page);
+  const pageSizeRef    = useRef(pageSize);
   orgIdsRef.current    = orgIds;
   platformsRef.current = platforms;
   assignedToRef.current = assignedTo;
+  pageRef.current      = page;
+  pageSizeRef.current  = pageSize;
+
+  // Reset to page 1 when filters change
+  const setPage = useCallback((p: number) => setPageState(p), []);
+  const setPageSize = useCallback((ps: number) => {
+    setPageSizeState(ps);
+    setPageState(1);
+  }, []);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -66,11 +85,14 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
       const plats = platformsRef.current;
       if (plats && plats.length > 0) params.set('platforms', plats.join(','));
       if (assignedToRef.current) params.set('assignedTo', assignedToRef.current);
+      params.set('page', String(pageRef.current));
+      params.set('pageSize', String(pageSizeRef.current));
       const res = await fetch(`/api/leads?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const json: {
         leads: Lead[];
+        total?: number;
         headers: string[];
         statusOptions: string[];
         statusLabelMap?: Record<string, string>;
@@ -99,7 +121,9 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
         setStageNameToId(json.stageNameToId);
       }
       setAssignments(json.assignments ?? {});
-      setLeads(sortNewestFirst(json.leads ?? []));
+      const loadedLeads = sortNewestFirst(json.leads ?? []);
+      setLeads(loadedLeads);
+      setTotal(json.total ?? loadedLeads.length);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
@@ -109,21 +133,22 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
     }
   }, []);
 
+  // When filters change: reset display state and go back to page 1.
+  // setPage(1) triggers the page effect below which calls fetchData.
   useEffect(() => {
     setLeads([]);
+    setTotal(0);
     setLoading(true);
     setLastUpdated(null);
-    setHeaders([]);
-    setStatusOptions([]);
-    setStatusLabelMap({});
-    setRequiresFollowupStatuses([]);
-    setRejectionStatuses([]);
-    setFailReasons([]);
-    setStageNameToId({});
-    setAssignments({});
+    setPage(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgIds?.join(','), platforms?.join(','), assignedTo]);
+
+  // Fetch whenever page or pageSize changes (also fires on initial mount).
+  useEffect(() => {
     fetchData(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgIds?.join(','), platforms?.join(','), assignedTo, fetchData]);
+  }, [page, pageSize, fetchData]);
 
   const updateLead = useCallback(
     async (payload: UpdatePayload) => {
@@ -174,7 +199,8 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
 
   return {
     leads,
-    stats: { total: leads.length, lastUpdated },
+    total,
+    stats: { total, lastUpdated },
     loading,
     error,
     headers,
@@ -187,5 +213,9 @@ export function useLeads(orgIds?: string[], platforms?: string[], assignedTo?: s
     assignments,
     updateLead,
     refetch,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
   };
 }

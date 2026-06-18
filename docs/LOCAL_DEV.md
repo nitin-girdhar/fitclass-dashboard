@@ -41,7 +41,7 @@ Create `.env.local` in the project root with this content:
 ```dotenv
 DATABASE_URL=postgres://lead_svc:devpass@localhost:5433/crm
 DATABASE_URL_TENANT=postgres://tenant_dash_svc:devpass@localhost:5433/crm
-DATABASE_URL_SERVICE=postgres://service_role:devpass@localhost:5433/crm
+DATABASE_URL_SERVICE=postgres://crm_service:devpass@localhost:5433/crm
 DATABASE_URL_ANALYTICS=postgres://analytics_svc:devpass@localhost:5433/crm
 
 PG_MAX=10

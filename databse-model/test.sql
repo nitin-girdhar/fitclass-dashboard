@@ -28,6 +28,18 @@ where email = 'nisha.goyal@fitclass.in';
 select *
 from public.marketing_platforms
 
+select *
+from public.marketing_leads
 
 
+select *
+from public.users
+where email = 'pradeep.chopra@fitclass.in';
 
+select *
+from organizations
+where id = 'b1000001-0000-0000-0000-000000000001'
+
+select *
+from public.users
+where users.org_id = 'b1000001-0000-0000-0000-000000000001'

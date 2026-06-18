@@ -45,7 +45,7 @@
     .\deploy-db.ps1 -SeedPassword "MyPass@99"
 #>
 param(
-    [string]$Database      = "crm_mono",
+    [string]$Database      = "crm_v1",
     [string]$DbHost        = "localhost",
     [string]$Port          = "5433",
     [string]$User          = "sa",
@@ -137,14 +137,21 @@ function Invoke-Psql {
 }
 
 # Drop and recreate database
-Invoke-Psql -Db "postgres" -ExtraArgs @("-c", "DROP DATABASE IF EXISTS `"$Database`";") 2>&1 | Out-Null
+# (FORCE) terminates any open connections before dropping — prevents
+# "database is being accessed by other users" when the dev server is running.
+$ErrorActionPreference = 'Continue'
+Invoke-Psql -Db "postgres" -ExtraArgs @("-q", "-c", "DROP DATABASE IF EXISTS `"$Database`" (FORCE);") | Out-Null
+$dropExit = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+if ($dropExit -ne 0) { Write-Error "Could not drop database '$Database'." }
 Write-Host "    Dropped database '$Database' (if it existed)."
-$createOut = Invoke-Psql -Db "postgres" -ExtraArgs @("-c", "CREATE DATABASE `"$Database`";") 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "    Created database '$Database'."
-} else {
-    Write-Error "Could not create database: $createOut"
-}
+
+$ErrorActionPreference = 'Continue'
+Invoke-Psql -Db "postgres" -ExtraArgs @("-c", "CREATE DATABASE `"$Database`";") | Out-Null
+$createExit = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+if ($createExit -ne 0) { Write-Error "Could not create database '$Database'." }
+Write-Host "    Created database '$Database'."
 
 # Apply scripts in order
 $scripts = Get-ChildItem $scriptDir -Filter "*.sql" |
@@ -157,17 +164,28 @@ foreach ($script in $scripts) {
     $i++
     Write-Host "    [$i/$total] $($script.Name) ..."
     $tmpErr = [System.IO.Path]::GetTempFileName()
+    # Temporarily allow stderr from native executables without terminating —
+    # psql emits NOTICE/WARNING to stderr which PS 5.1 wraps as NativeCommandError.
+    # Real failures are detected via $LASTEXITCODE (ON_ERROR_STOP=1 exits with 3).
+    # Force UTF-8 output so non-ASCII chars in SQL comments don't get mangled
+    # when PS 5.1 pipes the file content to docker exec (default is ASCII).
+    $prevEncoding = [Console]::OutputEncoding
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $ErrorActionPreference = 'Continue'
     if ($useDocker) {
-        Get-Content $script.FullName -Raw |
+        Get-Content $script.FullName -Raw -Encoding UTF8 |
             & docker exec -i -e "PGPASSWORD=$Password" $ContainerName `
                 psql -U $User -d $Database -v ON_ERROR_STOP=1 2>$tmpErr
     } else {
         & psql -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -f $script.FullName 2>$tmpErr
     }
-    if ($LASTEXITCODE -ne 0) {
+    $scriptExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    [Console]::OutputEncoding = $prevEncoding
+    if ($scriptExit -ne 0) {
         Write-Host ""
         Get-Content $tmpErr -ErrorAction SilentlyContinue |
-            Where-Object { $_ -match '^(ERROR|DETAIL|HINT|CONTEXT|FATAL)' } |
+            Where-Object { $_ -ne '' } |
             ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
         Remove-Item $tmpErr -ErrorAction SilentlyContinue
         Write-Error "Failed at $($script.Name). Deployment halted."
@@ -181,7 +199,7 @@ Write-OK "All $total scripts applied"
 # ===========================================================================
 Write-Step "Step 5 - Service role passwords (devpass)"
 
-$serviceRolesSql = "ALTER ROLE service_role    WITH PASSWORD 'devpass';" + [Environment]::NewLine +
+$serviceRolesSql = "ALTER ROLE crm_service     WITH PASSWORD 'devpass';" + [Environment]::NewLine +
                    "ALTER ROLE lead_svc        WITH PASSWORD 'devpass';" + [Environment]::NewLine +
                    "ALTER ROLE campaign_svc    WITH PASSWORD 'devpass';" + [Environment]::NewLine +
                    "ALTER ROLE user_mgmt_svc   WITH PASSWORD 'devpass';" + [Environment]::NewLine +
@@ -191,7 +209,7 @@ $serviceRolesSql = "ALTER ROLE service_role    WITH PASSWORD 'devpass';" + [Envi
                    "ALTER ROLE analytics_svc   WITH PASSWORD 'devpass';"
 
 $serviceRolesSql | docker exec -i -e "PGPASSWORD=$Password" $ContainerName psql -U $User -d $Database | Out-Null
-Write-OK "service_role, lead_svc, campaign_svc, user_mgmt_svc, notif_svc, intake_svc, tenant_dash_svc, analytics_svc"
+Write-OK "crm_service, lead_svc, campaign_svc, user_mgmt_svc, notif_svc, intake_svc, tenant_dash_svc, analytics_svc"
 
 # ===========================================================================
 # Step 6 - Seed user passwords
@@ -204,14 +222,7 @@ if (-not $hash -or $hash.Length -lt 55) {
 }
 Write-OK "bcrypt hash generated"
 
-$updateSql = "UPDATE users SET password_hash = '$hash', password_changed_at = CLOCK_TIMESTAMP() " +
-             "WHERE email IN (" +
-             "'vikram.malhotra@apexcp.in'," +
-             "'priya.kapoor@apexcp.in'," +
-             "'rahul.singh@apexcp.in'," +
-             "'ananya.verma@apexskt.in'," +
-             "'rajan.mehta@velvetkm.in'," +
-             "'deepa.nair@velvetln.in');"
+$updateSql = "UPDATE users SET password_hash = '$hash', password_changed_at = CLOCK_TIMESTAMP() WHERE NOT is_deleted;"
 
 $updateSql | docker exec -i -e "PGPASSWORD=$Password" $ContainerName psql -U $User -d $Database
 Write-OK "Seed user passwords set"

@@ -56,6 +56,7 @@ BEGIN;
     ALTER ROLE notif_svc       WITH PASSWORD :'NOTIF_SVC_PWD';
     ALTER ROLE intake_svc      WITH PASSWORD :'INTAKE_SVC_PWD';
     ALTER ROLE tenant_dash_svc WITH PASSWORD :'TENANT_DASH_PWD';
+    ALTER ROLE crm_service     WITH PASSWORD :'CRM_SERVICE_PWD';
     ALTER ROLE analytics_svc   WITH PASSWORD :'ANALYTICS_SVC_PWD';
 */
 
